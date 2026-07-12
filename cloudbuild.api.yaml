@@ -1,0 +1,11 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - api/Dockerfile
+      - -t
+      - gcr.io/ai-weekend-agent-501502/loupe-api
+      - .
+images:
+  - gcr.io/ai-weekend-agent-501502/loupe-api

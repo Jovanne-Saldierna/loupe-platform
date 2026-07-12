@@ -1,0 +1,12 @@
+frontend/
+docs/
+tests/
+output/
+.venv/
+.git/
+.pytest_cache/
+.playwright-cli/
+*.egg-info/
+__pycache__/
+*.pyc
+.DS_Store
