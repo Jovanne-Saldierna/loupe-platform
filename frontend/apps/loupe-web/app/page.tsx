@@ -696,6 +696,37 @@ function SectionCard({ icon: Icon, title, description, action, className = "", c
   );
 }
 
+// Dashboard-only insight primitives, built only from data the card already
+// fetched -- no new endpoints, no invented numbers. MiniStatStrip is a row
+// of small label/value pairs (KPI readouts, source-mix summary). InsightTiles
+// is 3 slightly larger label/name/value cards (quick category/region
+// takeaways) that read as "here's what to look at" before a longer table.
+function MiniStatStrip({ items, className = "" }: { items: { label: string; value: string }[]; className?: string }) {
+  return (
+    <div className={`mini-stat-strip ${className}`}>
+      {items.map((it) => (
+        <div className="mini-stat" key={it.label}>
+          <span className="mini-stat-label">{it.label}</span>
+          <span className="mini-stat-value">{it.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+function InsightTiles({ items }: { items: { label: string; name: string; value: string }[] }) {
+  return (
+    <div className="insight-tiles">
+      {items.map((it) => (
+        <div className="insight-tile" key={it.label}>
+          <span className="insight-tile-label">{it.label}</span>
+          <span className="insight-tile-name">{it.name}</span>
+          <span className="insight-tile-value">{it.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Dashboard-only: Category Leaderboard as a dense table/list hybrid (rank,
 // category + mini bar for the active sort metric, revenue, margin, return
 // rate, items) instead of a bare chart -- reads as a ranked business card.
@@ -734,7 +765,7 @@ function ReturnsLeakageSnapshot({ rows }: { rows: LeakageRow[] }) {
   const lead = top[0];
   return (
     <>
-      <p className="leakage-summary-line"><strong>{lead.category}</strong> leads at {money(lead.margin_lost_to_returns)} lost to returns ({lead.return_rate_pct.toFixed(1)}% return rate, {number(lead.returned_items)} returned items).</p>
+      <p className="leakage-summary-line">Suggested focus: start with <strong>{lead.category}</strong> &mdash; it has the highest margin lost to returns ({money(lead.margin_lost_to_returns)}, {lead.return_rate_pct.toFixed(1)}% return rate).</p>
       <div className="leakage-row-list">
         {top.map((r) => (
           <div className="leakage-row leakage-row-financial" key={r.category}>
@@ -867,7 +898,8 @@ export default function Page() {
   ];
 
   const sortedCategoryRows = categoryRows ? [...categoryRows].sort((a, b) => b[sortMetric] - a[sortMetric]).slice(0, 15) : null;
-  const rankedStateRows = stateRows ? [...stateRows].sort((a, b) => b.revenue - a.revenue).slice(0, 15) : null;
+  const displayedCategoryRows = sortedCategoryRows ? sortedCategoryRows.slice(0, 8) : null;
+  const rankedStateRows = stateRows ? [...stateRows].sort((a, b) => b.revenue - a.revenue).slice(0, 10) : null;
   const maxStateRevenue = rankedStateRows?.length ? Math.max(...rankedStateRows.map((s) => s.revenue)) : 0;
   const activeFilterCount = selectedCategories.length + selectedStates.length;
 
@@ -949,15 +981,15 @@ export default function Page() {
             <section><div className="dash-content-grid">
               <SectionCard className="dash-area-trend" icon={TrendingUp} title="Revenue & margin trend" description="Revenue and margin are plotted together so the profitability trend is visible alongside top-line growth, not just revenue in isolation.">
                 {data.trend.length > 0 && (() => { const latest = data.trend[data.trend.length - 1]; const marginRate = latest.revenue ? (latest.margin / latest.revenue) * 100 : null; return (
-                  <div className="chart-highlight-row">
-                    <span><strong>{money(latest.revenue)}</strong> revenue</span>
-                    <span><strong>{money(latest.margin)}</strong> margin</span>
-                    {marginRate !== null && <span><strong>{marginRate.toFixed(1)}%</strong> margin rate</span>}
-                    <span className="muted small">latest period ({formatPeriod(latest.period)})</span>
-                  </div>
+                  <MiniStatStrip className="mini-stat-strip-chips" items={[
+                    { label: "Revenue", value: money(latest.revenue) },
+                    { label: "Margin", value: money(latest.margin) },
+                    { label: "Margin rate", value: marginRate !== null ? `${marginRate.toFixed(1)}%` : "—" },
+                    { label: "Revenue Δ", value: delta(data.revenue.change_pct) },
+                    { label: "Margin rate Δ", value: delta(data.gross_margin_pct.change_pct, " pts") },
+                  ]} />
                 ) })()}
                 <div className="chart-frame chart-frame-compact"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data.trend}><defs><linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2995ff" stopOpacity={.25} /><stop offset="1" stopColor="#2995ff" stopOpacity={0} /></linearGradient><linearGradient id="marginFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8b5cf6" stopOpacity={.2} /><stop offset="1" stopColor="#8b5cf6" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="#e5e5e7" vertical={false} /><XAxis dataKey="period" tickFormatter={formatPeriod} tickLine={false} axisLine={false} tick={{ fill: "#85868b", fontSize: 12 }} /><YAxis hide /><Tooltip formatter={(v, n) => [money(Number(v)), n]} labelFormatter={(l) => formatPeriod(String(l))} /><Legend verticalAlign="top" height={24} wrapperStyle={{ fontSize: 12 }} /><Area type="monotone" name="Revenue" dataKey="revenue" stroke="#2995ff" strokeWidth={3} fill="url(#revenueFill)" /><Area type="monotone" name="Margin" dataKey="margin" stroke="#8b5cf6" strokeWidth={3} fill="url(#marginFill)" /></AreaChart></ResponsiveContainer></div>
-                <div className="chart-footer-line muted small">Revenue is {delta(data.revenue.change_pct)} and margin rate is {delta(data.gross_margin_pct.change_pct, " pts")} vs. the prior period.</div>
               </SectionCard>
 
               <SectionCard className="dash-area-leakage" icon={TrendingDown} title="Returns leakage snapshot" description="Top categories losing margin to returns.">
@@ -983,25 +1015,48 @@ export default function Page() {
                   {categoryRows && <button className="button" onClick={() => downloadCsv("category_breakdown.csv", categoryRows)}><Download size={14} />CSV</button>}
                 </div>}
               >
-                {!sortedCategoryRows ? <div className="muted small">Loading category leaderboard&hellip;</div> : sortedCategoryRows.length === 0 ? <div className="muted small">No category data in this window.</div> : <CategoryLeaderboardRows rows={sortedCategoryRows.slice(0, 8)} sortMetric={sortMetric} />}
+                {!displayedCategoryRows ? <div className="muted small">Loading category leaderboard&hellip;</div> : displayedCategoryRows.length === 0 ? <div className="muted small">No category data in this window.</div> : (() => {
+                  const topRevenueCat = [...displayedCategoryRows].sort((a, b) => b.revenue - a.revenue)[0];
+                  const topMarginCat = [...displayedCategoryRows].sort((a, b) => b.margin - a.margin)[0];
+                  const topReturnCat = [...displayedCategoryRows].sort((a, b) => b.return_rate_pct - a.return_rate_pct)[0];
+                  return <>
+                    <InsightTiles items={[
+                      { label: "Top revenue", name: topRevenueCat.category, value: money(topRevenueCat.revenue) },
+                      { label: "Highest margin", name: topMarginCat.category, value: money(topMarginCat.margin) },
+                      { label: "Highest return rate", name: topReturnCat.category, value: `${topReturnCat.return_rate_pct.toFixed(1)}%` },
+                    ]} />
+                    <CategoryLeaderboardRows rows={displayedCategoryRows} sortMetric={sortMetric} />
+                  </>;
+                })()}
               </SectionCard>
               <SectionCard
                 className="dash-area-region"
                 icon={MapPin}
                 title="Revenue by region"
-                description="Top 15 regions by revenue, share of the total shown region-to-region."
+                description="Top 10 regions by revenue, share of the total shown region-to-region."
                 action={stateRows && <button className="button" onClick={() => downloadCsv("region_breakdown.csv", stateRows)}><Download size={14} />CSV</button>}
               >
                 {!rankedStateRows ? <div className="muted small">Loading region breakdown&hellip;</div> : rankedStateRows.length === 0 ? <div className="muted small">No region data in this window.</div> : (() => {
                   const totalRevenue = rankedStateRows.reduce((sum, s) => sum + s.revenue, 0);
-                  return <div className="state-bars">{rankedStateRows.map((s) => (
-                    <div key={s.state} className="state-bar-row">
-                      <span className="state-bar-label">{s.state_abbrev || s.state}</span>
-                      <span className="state-bar-track"><span className="state-bar-fill" style={{ width: `${maxStateRevenue ? (s.revenue / maxStateRevenue) * 100 : 0}%` }} /></span>
-                      <span className="state-bar-value muted small">{money(s.revenue)}</span>
-                      <span className="state-bar-share muted small">{totalRevenue ? `${((s.revenue / totalRevenue) * 100).toFixed(0)}%` : ""}</span>
-                    </div>
-                  ))}</div>;
+                  const topRegion = rankedStateRows[0];
+                  const top3Share = totalRevenue ? (rankedStateRows.slice(0, 3).reduce((sum, s) => sum + s.revenue, 0) / totalRevenue) * 100 : 0;
+                  return <>
+                    <MiniStatStrip items={[
+                      { label: "Top region", value: topRegion.state_abbrev || topRegion.state },
+                      { label: "Top revenue", value: money(topRegion.revenue) },
+                      { label: "Top 3 share", value: `${top3Share.toFixed(0)}%` },
+                      { label: "Regions shown", value: String(rankedStateRows.length) },
+                    ]} />
+                    <p className="dash-insight-line muted small">Top 3 regions contribute {top3Share.toFixed(0)}% of displayed regional revenue, led by {topRegion.state}.</p>
+                    <div className="state-bars">{rankedStateRows.map((s) => (
+                      <div key={s.state} className="state-bar-row">
+                        <span className="state-bar-label">{s.state_abbrev || s.state}</span>
+                        <span className="state-bar-track"><span className="state-bar-fill" style={{ width: `${maxStateRevenue ? (s.revenue / maxStateRevenue) * 100 : 0}%` }} /></span>
+                        <span className="state-bar-value muted small">{money(s.revenue)}</span>
+                        <span className="state-bar-share muted small">{totalRevenue ? `${((s.revenue / totalRevenue) * 100).toFixed(0)}%` : ""}</span>
+                      </div>
+                    ))}</div>
+                  </>;
                 })()}
               </SectionCard>
 
@@ -1012,10 +1067,19 @@ export default function Page() {
                 description="Share of order items from paid channels (Facebook, Display, Email) vs. organic/direct (Search, Organic)."
                 action={channelMonths && channelMonths.length > 0 && <button className="button" onClick={() => downloadCsv("channel_mix.csv", channelMonths)}><Download size={14} />CSV</button>}
               >
-                {!channelMonths ? <div className="muted small">Loading channel mix&hellip;</div> : <>
-                  <ChannelChart months={channelMonths} compact />
-                  <div className="chart-footer-line muted small">Denominator: {number(channelMonths[channelMonths.length - 1].total)} order items in the latest period.</div>
-                </>}
+                {!channelMonths || channelMonths.length === 0 ? <div className="muted small">Loading channel mix&hellip;</div> : (() => {
+                  const latestMonth = channelMonths[channelMonths.length - 1];
+                  const paidPct = latestMonth.paid_share_pct;
+                  return <>
+                    <MiniStatStrip items={[
+                      { label: "Paid", value: `${paidPct.toFixed(1)}%` },
+                      { label: "Organic", value: `${(100 - paidPct).toFixed(1)}%` },
+                      { label: "Latest denominator", value: `${number(latestMonth.total)} items` },
+                      { label: "Dominant source", value: paidPct >= 50 ? "Paid" : "Organic" },
+                    ]} />
+                    <ChannelChart months={channelMonths} compact />
+                  </>;
+                })()}
               </SectionCard>
             </div></section>
           </div>}

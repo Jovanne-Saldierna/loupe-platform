@@ -647,3 +647,37 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .dash-surface .channel-snapshot { margin-top: 2px; }
 .dash-surface .channel-snapshot-bar { height: 12px; }
 .dash-surface .channel-snapshot-legend { margin-top: 8px; font-size: 12.5px; }
+
+/* --- Dashboard insight-density primitives -------------------------------
+   MiniStatStrip (label/value readouts) and InsightTiles (label/name/value
+   quick takeaways) are Dashboard-only components built from data each card
+   already fetched -- they exist so a card's headline numbers can be scanned
+   before its chart/table, instead of the chart/table being the only way to
+   find them. Dashboard-exclusive classes, no .dash-surface prefix needed. */
+.mini-stat-strip { display: flex; flex-wrap: wrap; gap: 14px; margin: 0 0 12px; }
+.mini-stat { display: flex; flex-direction: column; gap: 2px; min-width: 60px; }
+.mini-stat-label { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; color: var(--muted-foreground); }
+.mini-stat-value { font-size: 14px; font-weight: 650; white-space: nowrap; }
+
+/* Chip variant for the trend card's executive readout row -- small pill
+   backgrounds instead of bare label/value stacks, reading as insight chips
+   rather than loose text next to the chart. */
+.mini-stat-strip-chips { gap: 8px; }
+.mini-stat-strip-chips .mini-stat {
+  flex-direction: row; align-items: baseline; gap: 5px; background: var(--muted);
+  border-radius: 999px; padding: 4px 11px; min-width: 0;
+}
+.mini-stat-strip-chips .mini-stat-label { font-size: 10px; }
+.mini-stat-strip-chips .mini-stat-value { font-size: 12.5px; }
+
+.insight-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 12px; }
+.insight-tile { display: flex; flex-direction: column; gap: 2px; background: var(--muted); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.insight-tile-label { font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; color: var(--muted-foreground); }
+.insight-tile-name { font-size: 12.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.insight-tile-value { font-size: 12px; color: var(--muted-foreground); }
+
+.dash-insight-line { font-size: 12.5px; line-height: 1.4; margin: 0 0 10px; }
+
+@media (max-width: 560px) {
+  .insight-tiles { grid-template-columns: 1fr; }
+}
