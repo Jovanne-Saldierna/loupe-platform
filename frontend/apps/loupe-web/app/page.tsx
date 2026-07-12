@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
@@ -51,12 +51,15 @@ const ALL_REGIONS = [
   "West Virginia", "Wisconsin", "Wyoming", "District of Columbia",
 ];
 
+// Exactly the 5 supported prompts -- these map to intents apps/loupe_agent/chat.py
+// actually routes (single_category, multi_state_comparison, scenario_simulation,
+// returns_leakage, channel_analysis). No unsupported/vague prompts.
 const samplePrompts = [
-  "How is Dresses performing?",
-  "Compare California, Texas, and New York.",
-  "What if we cut the return rate in Swim by 5 points?",
   "Which categories are losing the most money to returns?",
+  "How is Swim performing?",
+  "Compare California, Texas, and New York.",
   "How has paid vs organic channel mix changed?",
+  "What if we cut the return rate in Swim by 5 points?",
 ];
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 }).format(n);
@@ -137,15 +140,35 @@ function inlineMd(text: string) {
 
 // Minimal markdown renderer covering exactly what apps/loupe_agent/chat.py's
 // prompts instruct the model to produce: ## / ### headers, **bold**, "- "
-// bullet lists, and pipe tables with a --- separator row. Standalone rule
-// lines ("---", "___", "***") are dropped entirely rather than rendered as
-// literal text. No external markdown dependency is added.
+// bullet lists, "> " blockquote-style asides, and pipe tables with a ---
+// separator row. Standalone rule lines ("---", "___", "***") are dropped
+// entirely rather than rendered as literal text, "> " prefixes are stripped
+// (the aside still renders, just without the raw marker), and narrative
+// sentences that restate the reporting grain/date window are dropped --
+// the app already shows that once via reportingScopeFor(), and chat.py's
+// _GROUNDING_FOOTER instructs the model to restate it inline too, which
+// otherwise shows the same scope information twice. No external markdown
+// dependency is added.
 const HR_RE = /^\s*([-*_])\1{2,}\s*$/;
-function stripRules(text: string) {
-  return text.split("\n").filter((l) => !HR_RE.test(l)).join("\n");
+const SCOPE_RESTATEMENT_RE = /reporting grain|date window/i;
+function cleanNarrativeLine(line: string) {
+  // Leave headers, list items, and table rows untouched -- only prose lines
+  // get sentence-level scope stripping.
+  if (/^\s*(#{2,4}\s|[-*]\s|\|)/.test(line)) return line;
+  if (!SCOPE_RESTATEMENT_RE.test(line)) return line;
+  const sentences = line.split(/(?<=[.!?])\s+/).filter((s) => !SCOPE_RESTATEMENT_RE.test(s));
+  return sentences.join(" ").trim();
+}
+function cleanMarkdown(text: string) {
+  return text
+    .split("\n")
+    .filter((l) => !HR_RE.test(l))
+    .map((l) => l.replace(/^>\s?/, ""))
+    .map(cleanNarrativeLine)
+    .join("\n");
 }
 function renderMarkdown(text: string) {
-  const blocks = stripRules(text).split(/\n\s*\n/);
+  const blocks = cleanMarkdown(text).split(/\n\s*\n/);
   return (
     <>
       {blocks.map((block, i) => {
@@ -214,7 +237,7 @@ function classify(header: string | null) {
 }
 function firstLine(s: string) { return s.split("\n").find((l) => l.trim())?.trim() ?? "" }
 function buildInsight(answerText: string) {
-  const blocks = splitByHeaders(stripRules(answerText));
+  const blocks = splitByHeaders(cleanMarkdown(answerText));
   const buckets: Record<string, string[]> = {};
   let leadIn = "";
   blocks.forEach((b, idx) => {
@@ -224,7 +247,7 @@ function buildInsight(answerText: string) {
     if (!buckets[bucketKey]) buckets[bucketKey] = [];
     buckets[bucketKey].push(key ? b.body : `#### ${b.header}\n${b.body}`);
   });
-  const headline = firstLine(buckets.takeaway?.[0] ?? leadIn) || firstLine(stripRules(answerText).replace(/^#{2,4}\s+.*/gm, "")) || "Grounded answer below.";
+  const headline = firstLine(buckets.takeaway?.[0] ?? leadIn) || firstLine(cleanMarkdown(answerText).replace(/^#{2,4}\s+.*/gm, "")) || "Grounded answer below.";
   return { headline, buckets };
 }
 const BODY_SECTIONS: { key: string; title: string; icon: ComponentType<{ size?: number }> }[] = [
@@ -327,7 +350,9 @@ function AskEvidence({ data }: { data: unknown }) {
 // a trend line) when only one month of data is present, per requirement.
 function ChannelChart({ months, compact = false }: { months: ChannelMonthRow[]; compact?: boolean }) {
   if (!months.length) return <div className="muted small">No channel data available.</div>;
-  if (months.length === 1) return <ChannelSnapshot month={months[0]} />;
+  const shares = months.map((m) => m.paid_share_pct);
+  const flat = months.length > 1 && Math.max(...shares) - Math.min(...shares) < 0.5;
+  if (months.length === 1 || flat) return <ChannelSnapshot month={months[months.length - 1]} />;
   const latest = months[months.length - 1];
   const prior = months[months.length - 2];
   const shift = latest.paid_share_pct - prior.paid_share_pct;
@@ -366,12 +391,73 @@ function ChannelSnapshot({ month }: { month: ChannelMonthRow }) {
   );
 }
 
-// Compact, always-available Ask Loupe entry point for non-Ask tabs.
+// Compact, always-available Ask Loupe entry point for non-Ask tabs -- styled
+// as a small version of the same chat composer used on the Ask Loupe tab
+// (soft dock + pill chips) rather than a plain card with a button row.
+// Clicking a chip routes to Ask Loupe and submits immediately via the same
+// askQuestion() the main composer uses.
 function QuickAsk({ subtitle, prompts, onAsk, disabled }: { subtitle: string; prompts: string[]; onAsk: (q: string) => void; disabled: boolean }) {
   return (
     <Card className="quick-ask">
-      <div className="card-head"><div><h2><Sparkles size={16} style={{ verticalAlign: "-3px", marginRight: 6 }} />Ask Loupe</h2><div className="muted small">{subtitle}</div></div></div>
-      <div className="actions">{prompts.map((p) => <button type="button" key={p} className="button" disabled={disabled} onClick={() => onAsk(p)}>{p}</button>)}</div>
+      <div className="quick-ask-head"><Sparkles size={15} /><span>Ask Loupe</span><span className="muted small quick-ask-subtitle">{subtitle}</span></div>
+      <div className="quick-ask-dock">
+        <div className="quick-ask-chips">{prompts.map((p) => <button type="button" key={p} className="chat-chip" disabled={disabled} onClick={() => onAsk(p)}>{p}</button>)}</div>
+      </div>
+    </Card>
+  );
+}
+
+// Ask Loupe answer hierarchy: the short headline lives in the chat bubble
+// (see the "ask" view below); this renders everything after it -- badges +
+// reporting scope, the key-metrics evidence row, then separated detail
+// sections (Baseline / Scenario / Pro Forma / Highlights / Additional
+// Detail), then Validation Notes and Recommendation callouts -- as one
+// self-contained "insight summary card" instead of a dense report dump.
+function AskInsightBody({ response, insight }: { response: AskResponse; insight: { headline: string; buckets: Record<string, string[]> } }) {
+  const scope = reportingScopeFor(response.category, response.raw_data);
+  return (
+    <div className="insight-summary-card">
+      <div className="insight-brief-head">
+        <div className="actions">
+          <Badge>{response.category.replaceAll("_", " ")}</Badge>
+          {response.source_health_status && <Badge tone={response.source_health_status === "healthy" ? "accent" : "warning"}>{response.source_health_status}</Badge>}
+        </div>
+        {scope && <span className="muted small insight-scope">{scope}</span>}
+      </div>
+      <AskEvidence data={response.raw_data} />
+      <div className="insight-body">
+        {BODY_SECTIONS.filter((s) => insight.buckets[s.key]?.length).map((s) => (
+          <div className="insight-section" key={s.key}>
+            <div className="insight-section-title"><s.icon size={14} />{s.title}</div>
+            {insight.buckets[s.key].map((body, i) => <div key={i}>{renderMarkdown(body)}</div>)}
+          </div>
+        ))}
+      </div>
+      {insight.buckets.caveats?.length ? <div className="callout callout-caveat">
+        <div className="callout-title"><TriangleAlert size={15} />Validation notes</div>
+        {insight.buckets.caveats.map((body, i) => <div key={i}>{renderMarkdown(body)}</div>)}
+      </div> : null}
+      {insight.buckets.recommendations?.length ? <div className="callout callout-recommend">
+        <div className="callout-title"><ArrowRight size={15} />Recommendation</div>
+        {insight.buckets.recommendations.map((body, i) => <div key={i}>{renderMarkdown(body)}</div>)}
+      </div> : null}
+      {response.source_health_warning && <div className="health-warning">{response.source_health_warning}</div>}
+    </div>
+  );
+}
+
+// One consistent card shape used everywhere on the dashboard/performance
+// tabs -- header (icon + title), description, optional action, then
+// content -- so sections read as one cohesive workspace instead of
+// mismatched ad hoc cards with a floating label stacked above them.
+function SectionCard({ icon: Icon, title, description, action, className = "", children }: { icon?: ComponentType<{ size?: number }>; title: string; description?: string; action?: ReactNode; className?: string; children: ReactNode }) {
+  return (
+    <Card className={`section-card ${className}`}>
+      <div className="card-head">
+        <div><h2>{Icon && <span className="section-card-icon"><Icon size={16} /></span>}{title}</h2>{description && <div className="muted small">{description}</div>}</div>
+        {action}
+      </div>
+      {children}
     </Card>
   );
 }
@@ -401,8 +487,9 @@ export default function Page() {
   const [benchmark, setBenchmark] = useState<Benchmark | null>(null);
 
   const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState<AskResponse | null>(null);
+  const [messages, setMessages] = useState<{ id: string; question: string; response: AskResponse | null }[]>([]);
   const [asking, setAsking] = useState(false);
+  const nextMessageId = useRef(0);
 
   useEffect(() => {
     const q = new URLSearchParams({ start_date: startDate, end_date: endDate });
@@ -437,18 +524,26 @@ export default function Page() {
   // Shared by the main Ask Loupe form and every QuickAsk widget -- same
   // fetch call (method/headers/body) the app has always used for
   // /api/v1/loupe/ask; only the caller (typed question vs. a quick prompt)
-  // differs.
+  // differs. Each call appends a new turn to the chat transcript instead of
+  // replacing a single answer slot, so Ask Loupe reads as a conversation.
   async function askQuestion(q: string) {
-    setQuestion(q);
+    const id = String(nextMessageId.current++);
+    setQuestion("");
     setActiveView("ask");
-    setAsking(true); setAnswer(null);
+    setAsking(true);
+    setMessages((prev) => [...prev, { id, question: q, response: null }]);
     try {
       const response = await fetch(`${API_BASE}/api/v1/loupe/ask`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q }) });
       const body = await response.json();
-      if (response.ok) setAnswer({ ...body, answer: looksUnconfigured(body.answer ?? "") ? ASSISTANT_UNAVAILABLE : body.answer });
-      else setAnswer({ category: "general", answer: body.detail, source_health_status: null, source_health_warning: null, raw_data: null });
-    } catch { setAnswer({ category: "general", answer: "Loupe could not be reached.", source_health_status: null, source_health_warning: null, raw_data: null }) }
-    finally { setAsking(false) }
+      const result: AskResponse = response.ok
+        ? { ...body, answer: looksUnconfigured(body.answer ?? "") ? ASSISTANT_UNAVAILABLE : body.answer }
+        : { category: "general", answer: body.detail, source_health_status: null, source_health_warning: null, raw_data: null };
+      setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, response: result } : m)));
+    } catch {
+      setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, response: { category: "general", answer: "Loupe could not be reached.", source_health_status: null, source_health_warning: null, raw_data: null } } : m)));
+    } finally {
+      setAsking(false);
+    }
   }
 
   const nav = [
@@ -497,13 +592,12 @@ export default function Page() {
                 {data.source_health.warning && <div className="health-warning">{data.source_health.warning}</div>}
               </Card>
             </div></section>
-            <section><QuickAsk subtitle="What should I look at first?" disabled={asking} onAsk={askQuestion} prompts={["What should I look at first?", "Which categories are losing the most money to returns?", "How is Dresses performing?"]} /></section>
+            <section><QuickAsk subtitle="Grounded answers about revenue, returns, and regions." disabled={asking} onAsk={askQuestion} prompts={["Which categories are losing the most money to returns?", "How is Swim performing?", "Compare California, Texas, and New York."]} /></section>
           </>}
 
           {activeView === "dashboard" && <>
             <section>
-              <div className="section-title"><SlidersHorizontal size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />Filters</div>
-              <Card>
+              <SectionCard icon={SlidersHorizontal} title="Filters" description="Scope every chart and KPI on this tab to a date range, category, or region.">
                 <div className="filters-row">
                   <div className="filter-field">
                     <span className="filter-label">Date range</span>
@@ -520,7 +614,7 @@ export default function Page() {
                   <span className="muted small">{formatDateShort(startDate)} &ndash; {formatDateShort(endDate)} &middot; {selectedCategories.length ? `${selectedCategories.length} categories` : "All categories"} &middot; {selectedStates.length ? `${selectedStates.length} regions` : "All regions"}</span>
                   {activeFilterCount > 0 && <button type="button" className="button ghost" onClick={() => { setSelectedCategories([]); setSelectedStates([]) }}>Reset filters</button>}
                 </div>
-              </Card>
+              </SectionCard>
             </section>
 
             <section><div className="section-title">Overview</div><div className="metric-grid">
@@ -534,113 +628,141 @@ export default function Page() {
               <Stat label="Items sold" value={number(data.order_items.value)} change={delta(data.order_items.change_pct)} />
             </div></section>
 
-            <section><div className="section-title">Revenue &amp; margin trend</div><Card>
-              <p className="chart-caption muted small">Revenue and margin are plotted together so the profitability trend is visible alongside top-line growth, not just revenue in isolation.</p>
-              <div className="chart-frame"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data.trend}><defs><linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2995ff" stopOpacity={.25} /><stop offset="1" stopColor="#2995ff" stopOpacity={0} /></linearGradient><linearGradient id="marginFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8b5cf6" stopOpacity={.2} /><stop offset="1" stopColor="#8b5cf6" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="#e5e5e7" vertical={false} /><XAxis dataKey="period" tickFormatter={formatPeriod} tickLine={false} axisLine={false} tick={{ fill: "#85868b", fontSize: 12 }} /><YAxis hide /><Tooltip formatter={(v, n) => [money(Number(v)), n]} labelFormatter={(l) => formatPeriod(String(l))} /><Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 12 }} /><Area type="monotone" name="Revenue" dataKey="revenue" stroke="#2995ff" strokeWidth={3} fill="url(#revenueFill)" /><Area type="monotone" name="Margin" dataKey="margin" stroke="#8b5cf6" strokeWidth={3} fill="url(#marginFill)" /></AreaChart></ResponsiveContainer></div>
-              {data.trend.length > 0 && (() => { const latest = data.trend[data.trend.length - 1]; const marginRate = latest.revenue ? (latest.margin / latest.revenue) * 100 : null; return <div className="chart-stats muted small">Latest period ({formatPeriod(latest.period)}): revenue {money(latest.revenue)} &middot; margin {money(latest.margin)}{marginRate !== null ? ` · margin rate ${marginRate.toFixed(1)}%` : ""}</div> })()}
-            </Card></section>
+            <section><SectionCard title="Revenue & margin trend" description="Revenue and margin are plotted together so the profitability trend is visible alongside top-line growth, not just revenue in isolation.">
+              {data.trend.length > 0 && (() => { const latest = data.trend[data.trend.length - 1]; const marginRate = latest.revenue ? (latest.margin / latest.revenue) * 100 : null; return (
+                <div className="chart-highlight-row">
+                  <span><strong>{money(latest.revenue)}</strong> revenue</span>
+                  <span><strong>{money(latest.margin)}</strong> margin</span>
+                  {marginRate !== null && <span><strong>{marginRate.toFixed(1)}%</strong> margin rate</span>}
+                  <span className="muted small">latest period ({formatPeriod(latest.period)})</span>
+                </div>
+              ) })()}
+              <div className="chart-frame chart-frame-compact"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data.trend}><defs><linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2995ff" stopOpacity={.25} /><stop offset="1" stopColor="#2995ff" stopOpacity={0} /></linearGradient><linearGradient id="marginFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8b5cf6" stopOpacity={.2} /><stop offset="1" stopColor="#8b5cf6" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="#e5e5e7" vertical={false} /><XAxis dataKey="period" tickFormatter={formatPeriod} tickLine={false} axisLine={false} tick={{ fill: "#85868b", fontSize: 12 }} /><YAxis hide /><Tooltip formatter={(v, n) => [money(Number(v)), n]} labelFormatter={(l) => formatPeriod(String(l))} /><Legend verticalAlign="top" height={24} wrapperStyle={{ fontSize: 12 }} /><Area type="monotone" name="Revenue" dataKey="revenue" stroke="#2995ff" strokeWidth={3} fill="url(#revenueFill)" /><Area type="monotone" name="Margin" dataKey="margin" stroke="#8b5cf6" strokeWidth={3} fill="url(#marginFill)" /></AreaChart></ResponsiveContainer></div>
+            </SectionCard></section>
 
             <section><div className="insight-grid">
-              <Card>
-                <div className="card-head"><div><h2><Shirt size={16} style={{ verticalAlign: "-2px", marginRight: 6 }} />Category leaderboard</h2><div className="muted small">Top 15 by {sortMetric.replaceAll("_", " ")}</div></div>
-                  <div className="actions">
-                    <select className="select" value={sortMetric} onChange={(e) => setSortMetric(e.target.value as typeof sortMetric)}><option value="revenue">Revenue</option><option value="margin">Margin</option><option value="return_rate_pct">Return rate</option></select>
-                    {categoryRows && <button className="button" onClick={() => downloadCsv("category_breakdown.csv", categoryRows)}><Download size={14} />CSV</button>}
-                  </div>
-                </div>
-                <p className="chart-caption muted small">Ranked by {sortMetric.replaceAll("_", " ")}, computed from the same order-item grain as the KPIs above.</p>
+              <SectionCard
+                icon={Shirt}
+                title="Category leaderboard"
+                description={`Top 15 by ${sortMetric.replaceAll("_", " ")}, computed from the same order-item grain as the KPIs above.`}
+                action={<div className="actions">
+                  <select className="select" value={sortMetric} onChange={(e) => setSortMetric(e.target.value as typeof sortMetric)}><option value="revenue">Revenue</option><option value="margin">Margin</option><option value="return_rate_pct">Return rate</option></select>
+                  {categoryRows && <button className="button" onClick={() => downloadCsv("category_breakdown.csv", categoryRows)}><Download size={14} />CSV</button>}
+                </div>}
+              >
                 {!sortedCategoryRows ? <div className="muted small">Loading category leaderboard&hellip;</div> : sortedCategoryRows.length === 0 ? <div className="muted small">No category data in this window.</div> : <div className="chart-frame" style={{ height: 340 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={sortedCategoryRows} layout="vertical" margin={{ left: 110 }}><CartesianGrid stroke="#e5e5e7" horizontal={false} /><XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => sortMetric === "return_rate_pct" ? `${v}%` : money(Number(v))} /><YAxis type="category" dataKey="category" width={130} tick={{ fontSize: 11 }} /><Tooltip formatter={(v) => sortMetric === "return_rate_pct" ? `${v}%` : money(Number(v))} /><Bar dataKey={sortMetric} fill="#2995ff" radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer></div>}
-              </Card>
-              <Card>
-                <div className="card-head"><div><h2><MapPin size={16} style={{ verticalAlign: "-2px", marginRight: 6 }} />Revenue by region</h2><div className="muted small">Top 15 regions</div></div>
-                  {stateRows && <button className="button" onClick={() => downloadCsv("region_breakdown.csv", stateRows)}><Download size={14} />CSV</button>}
-                </div>
+              </SectionCard>
+              <SectionCard
+                icon={MapPin}
+                title="Revenue by region"
+                description="Top 15 regions by revenue."
+                action={stateRows && <button className="button" onClick={() => downloadCsv("region_breakdown.csv", stateRows)}><Download size={14} />CSV</button>}
+              >
                 {!rankedStateRows ? <div className="muted small">Loading region breakdown&hellip;</div> : rankedStateRows.length === 0 ? <div className="muted small">No region data in this window.</div> : <div className="state-bars">{rankedStateRows.map((s) => <div key={s.state} className="state-bar-row"><span className="state-bar-label">{s.state_abbrev || s.state}</span><span className="state-bar-track"><span className="state-bar-fill" style={{ width: `${maxStateRevenue ? (s.revenue / maxStateRevenue) * 100 : 0}%` }} /></span><span className="state-bar-value muted small">{money(s.revenue)}</span></div>)}</div>}
-              </Card>
+              </SectionCard>
             </div></section>
 
-            <section><div className="section-title"><Megaphone size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />Paid vs. organic channel mix</div><Card>
-              <div className="card-head"><div><h2>Monthly order mix</h2><div className="muted small">Share of order items from paid channels (Facebook, Display, Email) vs. organic/direct (Search, Organic). Denominator: order_item count, not order count.</div></div>{channelMonths && channelMonths.length > 0 && <button className="button" onClick={() => downloadCsv("channel_mix.csv", channelMonths)}><Download size={14} />CSV</button>}</div>
+            <section><SectionCard
+              icon={Megaphone}
+              title="Paid vs. organic channel mix"
+              description="Share of order items from paid channels (Facebook, Display, Email) vs. organic/direct (Search, Organic). Denominator: order_item count, not order count."
+              action={channelMonths && channelMonths.length > 0 && <button className="button" onClick={() => downloadCsv("channel_mix.csv", channelMonths)}><Download size={14} />CSV</button>}
+            >
               {!channelMonths ? <div className="muted small">Loading channel mix&hellip;</div> : <ChannelChart months={channelMonths} />}
-            </Card></section>
+            </SectionCard></section>
 
-            <section><QuickAsk subtitle="Which category needs attention?" disabled={asking} onAsk={askQuestion} prompts={["Which category needs attention?", "Compare California, Texas, and New York.", "How has paid vs organic channel mix changed?"]} /></section>
+            <section><QuickAsk subtitle="Ask about categories, regions, or channel mix." disabled={asking} onAsk={askQuestion} prompts={["How has paid vs organic channel mix changed?", "Compare California, Texas, and New York.", "Which categories are losing the most money to returns?"]} /></section>
           </>}
 
           {activeView === "performance" && <>
-            <section><div className="section-title">Performance readout</div><Card><div className="card-head"><div><h2>vs. prior period</h2><div className="muted small">Change across the four governed metrics</div></div></div><div className="metric-grid">
-              <div><div className="stat-label">Revenue</div><div className="stat-value-sm">{delta(data.revenue.change_pct)}</div></div>
-              <div><div className="stat-label">Gross margin</div><div className="stat-value-sm">{delta(data.gross_margin_pct.change_pct, " pts")}</div></div>
-              <div><div className="stat-label">Order items</div><div className="stat-value-sm">{delta(data.order_items.change_pct)}</div></div>
-              <div><div className="stat-label">Return rate</div><div className="stat-value-sm">{delta(data.return_rate_pct.change_pct, " pts")}</div></div>
-            </div></Card></section>
+            <section><SectionCard title="Performance readout" description="Change across the four governed metrics vs. the prior period.">
+              <div className="metric-grid">
+                <div><div className="stat-label">Revenue</div><div className="stat-value-sm">{delta(data.revenue.change_pct)}</div></div>
+                <div><div className="stat-label">Gross margin</div><div className="stat-value-sm">{delta(data.gross_margin_pct.change_pct, " pts")}</div></div>
+                <div><div className="stat-label">Order items</div><div className="stat-value-sm">{delta(data.order_items.change_pct)}</div></div>
+                <div><div className="stat-label">Return rate</div><div className="stat-value-sm">{delta(data.return_rate_pct.change_pct, " pts")}</div></div>
+              </div>
+            </SectionCard></section>
 
             <section><div className="insight-grid">
-              <Card>
-                <div className="card-head"><div><h2>Revenue &amp; margin performance</h2><div className="muted small">{data.metric_context.reporting_grain}</div></div><Badge tone={data.source_health.status === "healthy" ? "accent" : "warning"}>{data.source_health.status}</Badge></div>
-                <div className="chart-frame"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data.trend}><CartesianGrid stroke="#e5e5e7" vertical={false} /><XAxis dataKey="period" tickFormatter={formatPeriod} tickLine={false} axisLine={false} tick={{ fill: "#85868b", fontSize: 12 }} /><YAxis hide /><Tooltip formatter={(v, n) => [money(Number(v)), n]} labelFormatter={(l) => formatPeriod(String(l))} /><Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 12 }} /><Area type="monotone" name="Revenue" dataKey="revenue" stroke="#2995ff" strokeWidth={3} fill="none" /><Area type="monotone" name="Margin" dataKey="margin" stroke="#8b5cf6" strokeWidth={3} fill="none" /></AreaChart></ResponsiveContainer></div>
+              <SectionCard
+                title="Revenue & margin performance"
+                description={data.metric_context.reporting_grain}
+                action={<Badge tone={data.source_health.status === "healthy" ? "accent" : "warning"}>{data.source_health.status}</Badge>}
+              >
+                <div className="chart-frame chart-frame-compact"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data.trend}><CartesianGrid stroke="#e5e5e7" vertical={false} /><XAxis dataKey="period" tickFormatter={formatPeriod} tickLine={false} axisLine={false} tick={{ fill: "#85868b", fontSize: 12 }} /><YAxis hide /><Tooltip formatter={(v, n) => [money(Number(v)), n]} labelFormatter={(l) => formatPeriod(String(l))} /><Legend verticalAlign="top" height={24} wrapperStyle={{ fontSize: 12 }} /><Area type="monotone" name="Revenue" dataKey="revenue" stroke="#2995ff" strokeWidth={3} fill="none" /><Area type="monotone" name="Margin" dataKey="margin" stroke="#8b5cf6" strokeWidth={3} fill="none" /></AreaChart></ResponsiveContainer></div>
                 <div className="insight"><TrendingUp size={18} /><div>{data.insight}</div></div>
                 <p className="muted small">{framing(data)}</p>
                 {data.source_health.warning && <div className="health-warning">{data.source_health.warning}</div>}
-              </Card>
-              <Card>
-                <div className="card-head"><div><h2>Data confidence</h2><div className="muted small">Source health and certification</div></div><Badge tone={data.source_health.status === "healthy" ? "accent" : "warning"}>{data.source_health.status}</Badge></div>
+              </SectionCard>
+              <SectionCard
+                title="Data confidence"
+                description="Source health and certification"
+                action={<Badge tone={data.source_health.status === "healthy" ? "accent" : "warning"}>{data.source_health.status}</Badge>}
+              >
                 <div className="muted small"><strong>Certification: </strong>{data.metric_context.certification_status}</div>
                 <div className="muted small"><strong>Version: </strong>{data.metric_context.version ?? "version unavailable"}</div>
                 <div className="muted small"><strong>Reporting grain: </strong>{data.metric_context.reporting_grain}</div>
-                <div className="section-title" style={{ marginTop: 16 }}>Company benchmark</div>
+                <div className="subsection-title">Company benchmark</div>
                 {!benchmark ? <div className="muted small">Loading benchmark&hellip;</div> : <><div className="muted small"><strong>Avg. margin: </strong>{benchmark.avg_margin_pct}%</div><div className="muted small"><strong>Avg. return rate: </strong>{benchmark.avg_return_rate_pct}% <span className={`pill ${returnRatePill(benchmark.avg_return_rate_pct).cls}`}>{returnRatePill(benchmark.avg_return_rate_pct).label}</span></div></>}
-                <div className="section-title" style={{ marginTop: 16 }}>Top margin lost to returns</div>
+                <div className="subsection-title">Top margin lost to returns</div>
                 {!leakageRows ? <div className="muted small">Loading returns leakage&hellip;</div> : <ul className="leakage-list">{[...leakageRows].sort((a, b) => b.margin_lost_to_returns - a.margin_lost_to_returns).slice(0, 5).map((row) => <li key={row.category}><span>{row.category}</span><span className="muted small">{money(row.margin_lost_to_returns)} lost &middot; {row.return_rate_pct}% return</span></li>)}</ul>}
-              </Card>
+              </SectionCard>
             </div></section>
 
-            <section><QuickAsk subtitle="Where is margin leaking?" disabled={asking} onAsk={askQuestion} prompts={["Where is margin leaking?", "What if we cut the return rate in Swim by 5 points?", "Which categories are losing the most money to returns?"]} /></section>
+            <section><QuickAsk subtitle="Ask about margin, returns, or scenario impact." disabled={asking} onAsk={askQuestion} prompts={["What if we cut the return rate in Swim by 5 points?", "Which categories are losing the most money to returns?", "How is Swim performing?"]} /></section>
           </>}
 
-          {activeView === "ask" && <section><div className="section-title">Ask Loupe</div><Card>
-            <div className="card-head"><div><h2>Ask a question, get a grounded answer</h2><div className="muted small">Grounded answers with metric and source context</div></div></div>
-            <div className="actions">{samplePrompts.map((p) => <button type="button" key={p} className="button" onClick={() => setQuestion(p)}>{p}</button>)}</div>
-            <form className="ask-row" onSubmit={(e) => { e.preventDefault(); if (question.trim()) askQuestion(question) }}>
-              <input value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Which categories drove margin growth?" aria-label="Ask Loupe" />
-              <button className="button primary" disabled={asking || !question.trim()}>{asking ? "Asking…" : "Ask"}</button>
-            </form>
+          {activeView === "ask" && <section className="chat-panel-wrap"><div className="chat-panel">
+            <div className="chat-panel-header">
+              <div className="chat-panel-title"><Sparkles size={16} />Ask Loupe</div>
+              <div className="chat-panel-status muted small">
+                {data.source_health.status === "healthy" ? "Grounded in live BigQuery data" : `Source health: ${data.source_health.status}`}
+              </div>
+            </div>
 
-            {answer && (answer.answer === ASSISTANT_UNAVAILABLE ? <div className="health-warning">{answer.answer}</div> : (() => {
-              const insight = buildInsight(answer.answer);
-              const scope = reportingScopeFor(answer.category, answer.raw_data);
-              return (
-                <div className="insight-brief">
-                  <div className="insight-brief-head">
-                    <div className="actions">
-                      <Badge>{answer.category.replaceAll("_", " ")}</Badge>
-                      {answer.source_health_status && <Badge tone={answer.source_health_status === "healthy" ? "accent" : "warning"}>{answer.source_health_status}</Badge>}
-                    </div>
-                    {scope && <span className="muted small insight-scope">{scope}</span>}
+            <div className="chat-scroll">
+              {messages.length === 0 ? (
+                <div className="chat-empty">
+                  <Sparkles size={22} />
+                  <p>Ask about revenue, categories, regions, channel mix, or scenario impact &mdash; grounded in live BigQuery data.</p>
+                  <div className="chat-chip-row">
+                    {samplePrompts.map((p) => <button type="button" key={p} className="chat-chip" onClick={() => askQuestion(p)}>{p}</button>)}
                   </div>
-                  <div className="insight-headline"><Sparkles size={18} /><span>{insight.headline}</span></div>
-                  <AskEvidence data={answer.raw_data} />
-                  <div className="insight-body">
-                    {BODY_SECTIONS.filter((s) => insight.buckets[s.key]?.length).map((s) => (
-                      <div className="insight-section" key={s.key}>
-                        <div className="insight-section-title"><s.icon size={14} />{s.title}</div>
-                        {insight.buckets[s.key].map((body, i) => <div key={i}>{renderMarkdown(body)}</div>)}
-                      </div>
-                    ))}
-                  </div>
-                  {insight.buckets.caveats?.length ? <div className="callout callout-caveat">
-                    <div className="callout-title"><TriangleAlert size={15} />Caveats &amp; validation notes</div>
-                    {insight.buckets.caveats.map((body, i) => <div key={i}>{renderMarkdown(body)}</div>)}
-                  </div> : null}
-                  {insight.buckets.recommendations?.length ? <div className="callout callout-recommend">
-                    <div className="callout-title"><ArrowRight size={15} />Recommendations / next steps</div>
-                    {insight.buckets.recommendations.map((body, i) => <div key={i}>{renderMarkdown(body)}</div>)}
-                  </div> : null}
-                  {answer.source_health_warning && <div className="health-warning">{answer.source_health_warning}</div>}
                 </div>
-              );
-            })())}
-          </Card></section>}
+              ) : messages.map((m) => {
+                const resp = m.response;
+                return (
+                  <div className="chat-message-group" key={m.id}>
+                    <div className="chat-bubble chat-bubble-user"><span>{m.question}</span></div>
+                    {!resp ? (
+                      <div className="chat-bubble chat-bubble-assistant"><Sparkles size={15} /><div className="chat-typing"><span /><span /><span /></div></div>
+                    ) : resp.answer === ASSISTANT_UNAVAILABLE ? (
+                      <div className="chat-bubble chat-bubble-assistant"><Sparkles size={15} /><span>{resp.answer}</span></div>
+                    ) : (() => {
+                      const insight = buildInsight(resp.answer);
+                      return (
+                        <>
+                          <div className="chat-bubble chat-bubble-assistant"><Sparkles size={15} /><span>{insight.headline}</span></div>
+                          <AskInsightBody response={resp} insight={insight} />
+                        </>
+                      );
+                    })()}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="chat-composer">
+              {messages.length > 0 && <div className="chat-chip-row chat-chip-row-compact">
+                {samplePrompts.map((p) => <button type="button" key={p} className="chat-chip" disabled={asking} onClick={() => askQuestion(p)}>{p}</button>)}
+              </div>}
+              <form className="chat-input-dock" onSubmit={(e) => { e.preventDefault(); if (question.trim()) askQuestion(question) }}>
+                <input value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="Ask about revenue, categories, regions, or a scenario…" aria-label="Ask Loupe" />
+                <button type="submit" className="chat-send" disabled={asking || !question.trim()} aria-label="Send question"><ArrowRight size={16} /></button>
+              </form>
+            </div>
+          </div></section>}
         </>}
       </div>
     </AppShell>

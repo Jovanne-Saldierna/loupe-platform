@@ -234,15 +234,77 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .dot-paid { background: var(--accent); }
 .dot-organic { background: #c7d2fe; }
 
-/* Quick-ask entry point card, reused on Home/Dashboard/Performance. */
-.quick-ask { border-left: 3px solid var(--accent); }
+/* Quick-ask entry point card, reused on Home/Dashboard/Performance -- styled
+   as a compact version of the Ask Loupe chat composer (soft dock + pill
+   chips) instead of a plain button row. */
+.quick-ask { padding: 20px 22px; }
+.quick-ask-head { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 14px; margin-bottom: 12px; }
+.quick-ask-head svg { color: var(--accent); flex: 0 0 auto; }
+.quick-ask-subtitle { font-weight: 400; margin-left: 2px; }
+.quick-ask-dock { background: var(--muted); border-radius: 16px; padding: 10px 12px; }
+.quick-ask-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 
-/* Ask Loupe insight-brief layout. */
-.insight-brief { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
-.insight-brief-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+/* Latest-period highlight row above the revenue/margin trend chart -- a
+   clearer, bolder summary than the old below-chart caption, paired with a
+   shorter chart frame so the card carries less empty space. */
+.chart-highlight-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 18px; margin: 2px 0 14px; font-size: 14px; }
+.chart-highlight-row strong { font-size: 16px; }
+.chart-frame-compact { height: 220px; }
+
+/* --- Ask Loupe chat panel (shadcn message-scroller reference) ------------ */
+
+.chat-panel-wrap { display: flex; justify-content: center; }
+.chat-panel {
+  width: 100%; max-width: 820px; display: flex; flex-direction: column;
+  background: var(--card); border: 1px solid var(--border); border-radius: 24px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 1px 3px rgba(16, 24, 40, .06);
+  overflow: hidden;
+}
+.chat-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.chat-panel-title { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 650; }
+.chat-panel-title svg { color: var(--accent); }
+
+.chat-scroll { flex: 1; min-height: 340px; max-height: 620px; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 22px; }
+.chat-empty { margin: auto; max-width: 420px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; color: var(--muted-foreground); padding: 32px 16px; }
+.chat-empty svg { color: var(--accent); }
+.chat-chip-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.chat-chip-row-compact { justify-content: flex-start; margin-bottom: 10px; }
+.chat-chip {
+  border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 7px 14px;
+  font-size: 13px; color: var(--foreground); cursor: pointer;
+}
+.chat-chip:hover { border-color: var(--accent); color: var(--accent); }
+.chat-chip:disabled { opacity: .5; cursor: not-allowed; }
+
+.chat-message-group { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.chat-bubble { max-width: 100%; border-radius: 16px; padding: 11px 16px; font-size: 14px; line-height: 1.5; }
+.chat-bubble-user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.chat-bubble-assistant { display: flex; align-items: flex-start; gap: 8px; background: var(--muted); border-bottom-left-radius: 4px; font-weight: 600; }
+.chat-bubble-assistant svg { color: var(--accent); flex: 0 0 auto; margin-top: 2px; }
+.chat-typing { display: flex; gap: 4px; padding: 3px 0; }
+.chat-typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--muted-foreground); animation: chatTyping 1.2s ease-in-out infinite; }
+.chat-typing span:nth-child(2) { animation-delay: .15s; }
+.chat-typing span:nth-child(3) { animation-delay: .3s; }
+@keyframes chatTyping { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+.chat-composer { border-top: 1px solid var(--border); background: var(--muted); padding: 14px 24px 18px; }
+.chat-input-dock { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 6px 6px 6px 18px; }
+.chat-input-dock input { flex: 1; min-width: 0; border: 0; background: transparent; outline: 0; font-size: 14px; padding: 9px 0; color: var(--foreground); }
+.chat-send {
+  flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%; border: 0;
+  background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.chat-send:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Ask Loupe insight-summary-card: reads as a continuation of the assistant
+   turn above it (a soft left accent instead of a full boxed border on every
+   side) rather than a separate report card pasted underneath the bubble. */
+.insight-summary-card {
+  width: 100%; background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--accent-soft);
+  border-radius: 14px; padding: 18px 20px 20px;
+}
+.insight-brief-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .insight-scope { text-align: right; }
-.insight-headline { display: flex; align-items: flex-start; gap: 10px; font-size: 18px; font-weight: 650; line-height: 1.4; margin-bottom: 16px; }
-.insight-headline svg { color: var(--accent); flex: 0 0 auto; margin-top: 2px; }
 .insight-body { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
 .insight-section { padding-top: 14px; border-top: 1px solid var(--border); }
 .insight-section:first-child { padding-top: 0; border-top: 0; }
@@ -262,6 +324,54 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .callout-recommend { background: var(--accent-soft); color: var(--foreground); }
 .callout-recommend .callout-title { color: var(--accent); }
 .callout-recommend ul { padding-left: 18px; }
+
+/* --- Shell cohesion: sidebar + canvas read as one workspace, shadcn Create
+   preset style -- scoped to .product-loupe only, so Governance/Triage keep
+   their existing floating-sidebar-card layout untouched. -------------------- */
+.product-loupe { max-width: 1440px; margin: 0 auto; }
+.product-loupe .app-shell {
+  gap: 0; background: var(--card); border: 1px solid var(--border); border-radius: 28px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 20px 48px rgba(16, 24, 40, .06);
+  overflow: hidden; align-items: stretch;
+}
+.product-loupe .sidebar {
+  background: #fafbfc; border: 0; border-right: 1px solid var(--border); border-radius: 0;
+  box-shadow: none; padding: 26px 16px; align-self: stretch;
+}
+.product-loupe .brand { padding: 2px 8px 22px; }
+.product-loupe .nav-item { font-size: 14px; padding: 10px 12px; }
+.product-loupe .nav-item.active { color: var(--accent); font-weight: 650; }
+.product-loupe .workspace { padding: 32px 40px; max-width: none; }
+.product-loupe .dashboard-surface { gap: 24px; }
+/* The old "hero card" competed with every card below it for attention;
+   as a borderless workspace header strip it reads as part of the same
+   canvas instead of a separate pasted panel. */
+.product-loupe .hero-panel {
+  background: transparent; border: 0; border-radius: 0; box-shadow: none;
+  padding: 0 0 22px; border-bottom: 1px solid var(--border); margin-bottom: 2px;
+}
+.product-loupe .section-title { margin-bottom: 10px; letter-spacing: .03em; }
+
+@media (max-width: 820px) {
+  .product-loupe .app-shell { border-radius: 20px; }
+  .product-loupe .sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
+  .product-loupe .workspace { padding: 20px; }
+}
+
+/* Lightweight in-card sub-label (e.g. "Company benchmark" inside Data
+   confidence) -- distinct from .section-title so it never competes with a
+   card's own SectionCard header for visual weight. */
+.subsection-title {
+  font-size: 12px; font-weight: 650; letter-spacing: .02em; text-transform: uppercase;
+  color: var(--muted-foreground); margin: 16px 0 6px;
+}
+
+/* SectionCard: the one card shape reused across Dashboard/Performance --
+   icon + title + description + optional action, then content. Replaces the
+   old pattern of a floating uppercase label sitting above an unrelated
+   card, which read as two disconnected components stacked together. */
+.section-card .card-head { margin-bottom: 14px; }
+.section-card-icon { display: inline-flex; vertical-align: -3px; margin-right: 6px; color: var(--accent); }
 
 @media (max-width: 640px) {
   .msd-panel { width: 220px; }
