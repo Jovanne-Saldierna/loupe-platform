@@ -771,150 +771,153 @@ function topLeakagePriority(rows: LeakageRow[]) {
   return actNow[0] ?? [...classified].sort((a, b) => b.margin_lost_to_returns - a.margin_lost_to_returns)[0];
 }
 
-// Dashboard-only: Returns Priority Map -- a dense grid of compact priority
-// rows (category, priority badge, margin lost, return rate, returned items,
-// an impact bar) instead of a scatterplot. return_rate_pct values in this
-// dataset cluster tightly, which made the earlier x/y bubble matrix crowd
-// into a narrow band with overlapping labels; a sorted, classified list
-// reads in seconds regardless of how spread out the underlying numbers are.
-// Built entirely from the same rows already powering the Returns Leakage
-// Snapshot card (leakageRows state, fetched from the existing
-// /returns-leakage endpoint) -- no new endpoint, no invented numbers.
-function ReturnsPriorityMap({ rows }: { rows: LeakageRow[] }) {
+// Dashboard-only: Return risk by category -- a kanban-style board of four
+// priority lanes (Act Now / Margin Recovery / Watchlist / Stable) instead of
+// a long ranked report list. Same classification (classifyLeakageRows) the
+// Action feed's top-priority row uses, so the two widgets always agree.
+// Each lane shows at most 3 category chips, capped at 8 categories total
+// across the board (Act Now filled first) -- built entirely from the same
+// rows already powering the Top leakage mini-widget (leakageRows state,
+// fetched from the existing /returns-leakage endpoint), no invented numbers.
+function ReturnRiskLanes({ rows }: { rows: LeakageRow[] }) {
   const classified = classifyLeakageRows(rows);
-  if (!classified) return <p className="muted small">Returns priority map needs returns leakage data.</p>;
+  if (!classified) return <p className="muted small">Return risk needs returns leakage data.</p>;
 
-  const quadrantCls = (q: MatrixQuadrant) => MATRIX_QUADRANTS.find((m) => m.key === q)!.cls;
-  // Act Now first, then Margin Recovery / Watchlist / Stable; margin lost
-  // descending within each priority group.
   const ranked = [...classified].sort((a, b) =>
     MATRIX_QUADRANT_ORDER.indexOf(a.quadrant) - MATRIX_QUADRANT_ORDER.indexOf(b.quadrant) || b.margin_lost_to_returns - a.margin_lost_to_returns
   );
-
-  // ranked is sorted Act Now first (then by margin lost desc within each
-  // group), so the first Act Now row is always the highest-margin-lost one.
   const firstActNow = ranked.find((r) => r.quadrant === "Act Now");
   const insight = firstActNow
-    ? `Start with ${firstActNow.category}: it has the highest margin lost and sits in the Act Now priority group.`
-    : `Start with ${ranked[0].category}: it has the highest margin lost among plotted categories, though none currently cross both the return-rate and margin-lost thresholds.`;
+    ? `${firstActNow.category} leads Act Now at ${money(firstActNow.margin_lost_to_returns)} lost.`
+    : `${ranked[0].category} has the highest margin lost among plotted categories.`;
 
   const maxMarginLost = Math.max(...classified.map((r) => r.margin_lost_to_returns), 1);
-  const maxReturnedItems = Math.max(...classified.map((r) => r.returned_items), 1);
+
+  // Up to 3 chips per lane, then trimmed to 8 total across the board --
+  // Act Now lane gets first claim on the shared budget.
+  let budget = 8;
+  const laneItems = MATRIX_QUADRANT_ORDER.map((q) => {
+    const lane = ranked.filter((r) => r.quadrant === q).slice(0, Math.min(3, budget));
+    budget -= lane.length;
+    return { quadrant: q, rows: lane };
+  });
 
   return (
     <>
       <p className="dash-insight-line">{insight}</p>
-      <div className="matrix-legend">
-        {MATRIX_QUADRANTS.map((q) => <span className={`matrix-legend-item ${q.cls}`} key={q.key}><i className="matrix-legend-dot" />{q.key}</span>)}
-      </div>
-      <div className="priority-map-grid">
-        {ranked.map((r) => (
-          <div className={`priority-row ${quadrantCls(r.quadrant)}`} key={r.category}>
-            <div className="priority-row-top">
-              <span className="priority-row-cat" title={r.category}>{r.category}</span>
-              <span className="priority-badge">{r.quadrant}</span>
+      <div className="risk-lanes">
+        {MATRIX_QUADRANTS.map((q) => {
+          const lane = laneItems.find((l) => l.quadrant === q.key)!.rows;
+          return (
+            <div className={`risk-lane ${q.cls}`} key={q.key}>
+              <div className="risk-lane-head"><i className="matrix-legend-dot" />{q.key}</div>
+              <div className="risk-lane-chips">
+                {lane.length === 0 ? <span className="muted small risk-lane-empty">None</span> : lane.map((r) => (
+                  <div className="risk-chip" key={r.category}>
+                    <span className="risk-chip-cat" title={r.category}>{r.category}</span>
+                    <span className="risk-chip-metrics">
+                      <span>{money(r.margin_lost_to_returns)}</span>
+                      <span>{r.return_rate_pct.toFixed(1)}%</span>
+                    </span>
+                    <span className="risk-chip-track"><span className="risk-chip-fill" style={{ width: `${(r.margin_lost_to_returns / maxMarginLost) * 100}%` }} /></span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="priority-row-metrics">
-              <span className="priority-metric"><b>{money(r.margin_lost_to_returns)}</b><i>margin lost</i></span>
-              <span className="priority-rate-pill">{r.return_rate_pct.toFixed(1)}% return</span>
-              <span className="priority-metric priority-metric-items"><b>{number(r.returned_items)}</b><i>{Number.isFinite(r.total_items) && r.total_items ? `of ${number(r.total_items)} returned` : "returned"}</i></span>
-            </div>
-            <span className="priority-impact-track"><span className="priority-impact-fill" style={{ width: `${(r.margin_lost_to_returns / maxMarginLost) * 100}%` }} /></span>
-            <span className="priority-items-track"><span className="priority-items-fill" style={{ width: `${(r.returned_items / maxReturnedItems) * 100}%` }} /></span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </>
   );
 }
 
-// Dashboard-only: Performance bridge -- replaces the old overlapping
-// revenue/margin area chart with a current-vs-prior comparison instead.
-// Prior revenue/margin are derived from the same relative (%) and point
-// (pts) deltas already used by the KPI row and Stat components elsewhere on
-// this dashboard (data.revenue.change_pct is a relative %, data.
+// Dashboard-only: shared current-vs-prior math for the Overview mini-card
+// grid below. Prior revenue/margin are derived from the same relative (%)
+// and point (pts) deltas already used by the KPI row elsewhere on this
+// dashboard (overview.revenue.change_pct is a relative %, overview.
 // gross_margin_pct.change_pct is a point delta) -- no new fields, no
 // invented numbers.
-function PerformanceBridge({ overview }: { overview: Overview }) {
+function computeBridgeMetrics(overview: Overview) {
   const revChangePct = overview.revenue.change_pct;
   const priorRevenue = revChangePct !== null && revChangePct !== -100 ? overview.revenue.value / (1 + revChangePct / 100) : null;
   const currentMargin = overview.revenue.value * (overview.gross_margin_pct.value / 100);
   const marginRateChange = overview.gross_margin_pct.change_pct;
   const priorMarginRate = marginRateChange !== null ? overview.gross_margin_pct.value - marginRateChange : null;
   const priorMargin = priorRevenue !== null && priorMarginRate !== null ? priorRevenue * (priorMarginRate / 100) : null;
+  const marginChangePct = priorMargin !== null && priorMargin !== 0 ? ((currentMargin - priorMargin) / priorMargin) * 100 : null;
   const itemsChangePct = overview.order_items.change_pct;
+  return { revChangePct, priorRevenue, currentRevenue: overview.revenue.value, currentMargin, priorMargin, marginChangePct, marginRateChange, itemsChangePct };
+}
 
-  const maxRevenue = Math.max(overview.revenue.value, priorRevenue ?? 0, 1);
-  const maxMargin = Math.max(currentMargin, priorMargin ?? 0, 1);
-
-  let interpretation: string | null = null;
-  if (revChangePct !== null && marginRateChange !== null) {
-    const revWord = revChangePct >= 0 ? `up ${revChangePct.toFixed(1)}%` : `down ${Math.abs(revChangePct).toFixed(1)}%`;
-    interpretation = marginRateChange >= 0
-      ? `Revenue is ${revWord} while margin rate is up ${marginRateChange.toFixed(1)} pts, indicating growth without margin compression.`
-      : `Revenue is ${revWord} while margin rate is down ${Math.abs(marginRateChange).toFixed(1)} pts, indicating margin compression.`;
-  }
-
+type CardTone = "up" | "down" | "neutral";
+function MiniCompareCard({ icon: Icon, label, value, prior, deltaLabel, tone, pct }: { icon: ComponentType<{ size?: number }>; label: string; value: string; prior: string; deltaLabel: string; tone: CardTone; pct: number }) {
   return (
-    <>
-      <div className="bridge-bars">
-        <div className="bridge-metric">
-          <div className="bridge-metric-head"><span>Revenue</span><span className="delta">{delta(revChangePct)}</span></div>
-          <div className="bridge-bar-row">
-            <span className="bridge-bar-label muted small">Prior</span>
-            <span className="bridge-bar-track"><span className="bridge-bar-fill bridge-bar-prior" style={{ width: priorRevenue !== null ? `${(priorRevenue / maxRevenue) * 100}%` : "0%" }} /></span>
-            <span className="bridge-bar-value muted small">{priorRevenue !== null ? money(priorRevenue) : "—"}</span>
-          </div>
-          <div className="bridge-bar-row">
-            <span className="bridge-bar-label muted small">Current</span>
-            <span className="bridge-bar-track"><span className="bridge-bar-fill bridge-bar-current" style={{ width: `${(overview.revenue.value / maxRevenue) * 100}%` }} /></span>
-            <span className="bridge-bar-value">{money(overview.revenue.value)}</span>
-          </div>
-        </div>
-        <div className="bridge-metric">
-          <div className="bridge-metric-head"><span>Margin</span><span className="delta">{delta(marginRateChange, " pts")}</span></div>
-          <div className="bridge-bar-row">
-            <span className="bridge-bar-label muted small">Prior</span>
-            <span className="bridge-bar-track"><span className="bridge-bar-fill bridge-bar-prior" style={{ width: priorMargin !== null ? `${(priorMargin / maxMargin) * 100}%` : "0%" }} /></span>
-            <span className="bridge-bar-value muted small">{priorMargin !== null ? money(priorMargin) : "—"}</span>
-          </div>
-          <div className="bridge-bar-row">
-            <span className="bridge-bar-label muted small">Current</span>
-            <span className="bridge-bar-track"><span className="bridge-bar-fill bridge-bar-current" style={{ width: `${(currentMargin / maxMargin) * 100}%` }} /></span>
-            <span className="bridge-bar-value">{money(currentMargin)}</span>
-          </div>
-        </div>
-      </div>
-      <MiniStatStrip className="mini-stat-strip-chips" items={[
-        { label: "Margin rate", value: `${overview.gross_margin_pct.value.toFixed(1)}%` },
-        { label: "Margin rate Δ", value: delta(marginRateChange, " pts") },
-        ...(itemsChangePct !== null ? [{ label: "Items sold Δ", value: delta(itemsChangePct) }] : []),
-      ]} />
-      {interpretation && <p className="dash-insight-line">{interpretation}</p>}
-    </>
+    <div className="mini-compare-card">
+      <div className="mini-card-head"><span className="mini-card-icon"><Icon size={13} /></span><span>{label}</span><span className={`mini-card-delta mini-card-delta-${tone}`}>{deltaLabel}</span></div>
+      <div className="mini-card-value">{value}</div>
+      <div className="mini-card-bar-track"><span className={`mini-card-bar-fill mini-card-bar-${tone}`} style={{ width: `${Math.max(4, Math.min(100, pct))}%` }} /></div>
+      <div className="mini-card-sub muted small">Prior {prior}</div>
+    </div>
+  );
+}
+function MiniStatusCard({ icon: Icon, label, value, deltaLabel, status, tone }: { icon: ComponentType<{ size?: number }>; label: string; value: string; deltaLabel: string; status: string; tone: CardTone }) {
+  return (
+    <div className="mini-compare-card">
+      <div className="mini-card-head"><span className="mini-card-icon"><Icon size={13} /></span><span>{label}</span><span className={`mini-card-delta mini-card-delta-${tone}`}>{deltaLabel}</span></div>
+      <div className="mini-card-value">{value}</div>
+      <span className={`mini-card-status mini-card-status-${tone}`}>{status}</span>
+    </div>
   );
 }
 
-type ActionRow = { icon: ComponentType<{ size?: number }>; title: string; reason: string; metric: string };
-
-// Dashboard-only: Executive action queue -- 3-4 compact recommendation rows
-// generated from data already fetched elsewhere on the dashboard (returns
-// leakage, category, region, channel). Each row's presence is conditional
-// on its own signal actually being present in the data (e.g. the channel
-// row only appears when one source clearly dominates) rather than always
-// rendering a fixed set of rows.
-function ExecutiveActionQueue({ actions }: { actions: ActionRow[] }) {
-  if (!actions.length) return <p className="muted small">Not enough data yet to generate action recommendations.</p>;
+// Dashboard-only: Overview mini-card grid -- replaces the old narrative
+// Performance Bridge card with four compact status/comparison tiles
+// (2x2) instead of one large chart-less report block. Every value comes
+// from computeBridgeMetrics(), derived only from already-fetched KPI
+// fields -- no invented numbers.
+function OverviewMiniGrid({ overview }: { overview: Overview }) {
+  const m = computeBridgeMetrics(overview);
+  const marginTone: CardTone = m.marginRateChange === null ? "neutral" : m.marginRateChange >= 0 ? "up" : "down";
+  const marginStatusLabel = m.marginRateChange === null ? "No prior period" : m.marginRateChange > 0 ? "Expanding" : m.marginRateChange < 0 ? "Compressing" : "Flat";
+  const itemsTone: CardTone = m.itemsChangePct === null ? "neutral" : m.itemsChangePct >= 0 ? "up" : "down";
   return (
-    <div className="action-queue">
-      {actions.map((a) => (
-        <div className="action-row" key={a.title}>
-          <span className="action-row-icon"><a.icon size={15} /></span>
-          <div className="action-row-body">
-            <div className="action-row-title">{a.title}</div>
-            <div className="action-row-reason muted small">{a.reason}</div>
-          </div>
-          <span className="action-row-metric">{a.metric}</span>
+    <div className="overview-mini-grid">
+      <MiniCompareCard
+        icon={DollarSign} label="Revenue" value={money(m.currentRevenue)}
+        prior={m.priorRevenue !== null ? money(m.priorRevenue) : "—"} deltaLabel={delta(m.revChangePct)}
+        tone={m.revChangePct === null ? "neutral" : m.revChangePct >= 0 ? "up" : "down"}
+        pct={m.priorRevenue ? (m.currentRevenue / Math.max(m.currentRevenue, m.priorRevenue)) * 100 : 100}
+      />
+      <MiniCompareCard
+        icon={Percent} label="Margin" value={money(m.currentMargin)}
+        prior={m.priorMargin !== null ? money(m.priorMargin) : "—"} deltaLabel={m.marginChangePct !== null ? delta(m.marginChangePct) : "Prior period unavailable"}
+        tone={m.marginChangePct === null ? "neutral" : m.marginChangePct >= 0 ? "up" : "down"}
+        pct={m.priorMargin ? (m.currentMargin / Math.max(m.currentMargin, m.priorMargin)) * 100 : 100}
+      />
+      <MiniStatusCard icon={ShieldCheck} label="Margin rate" value={`${overview.gross_margin_pct.value.toFixed(1)}%`} deltaLabel={delta(m.marginRateChange, " pts")} status={marginStatusLabel} tone={marginTone} />
+      <MiniStatusCard icon={ShoppingBag} label="Items sold" value={number(overview.order_items.value)} deltaLabel={delta(m.itemsChangePct)} status={m.itemsChangePct === null ? "No prior period" : m.itemsChangePct >= 0 ? "Growing" : "Declining"} tone={itemsTone} />
+    </div>
+  );
+}
+
+type FeedPriority = "high" | "medium" | "info";
+type FeedItem = { icon: ComponentType<{ size?: number }>; title: string; metric: string; priority: FeedPriority };
+
+// Dashboard-only: Action queue as a compact activity/action feed -- a
+// priority dot, icon, short action label, and a metric pill per row,
+// instead of prose "Investigate / Review" sentences. Same underlying
+// signals as before (returns leakage, category, region, channel), each
+// still conditional on its own signal actually being present in the data.
+function ActionFeed({ items }: { items: FeedItem[] }) {
+  if (!items.length) return <p className="muted small">Not enough data yet to generate action recommendations.</p>;
+  return (
+    <div className="action-feed">
+      {items.map((a) => (
+        <div className="feed-row" key={a.title}>
+          <span className={`feed-dot feed-dot-${a.priority}`} />
+          <span className="feed-icon"><a.icon size={14} /></span>
+          <span className="feed-title">{a.title}</span>
+          <span className="feed-metric">{a.metric}</span>
         </div>
       ))}
     </div>
@@ -949,30 +952,48 @@ function CategoryLeaderboardRows({ rows, sortMetric }: { rows: CategoryRow[]; so
   );
 }
 
-// Dashboard-only: top 3 returns-leakage categories by absolute margin lost,
-// read straight from the /returns-leakage endpoint's raw rows (same shape
-// as Ask Loupe's diagnostic) -- reuses the .leakage-row-* card styling so
-// the two surfaces look like one design system without sharing any code.
-function ReturnsLeakageSnapshot({ rows }: { rows: LeakageRow[] }) {
+// Dashboard-only: compact "Top leakage" mini-widget -- the merge target for
+// the old, separate Returns Leakage Snapshot card, so the Dashboard doesn't
+// show two large returns-focused sections (this one and Return risk by
+// category) saying the same thing. Three rows, no paragraph.
+function TopLeakageMini({ rows }: { rows: LeakageRow[] }) {
   const top = [...rows].sort((a, b) => b.margin_lost_to_returns - a.margin_lost_to_returns).slice(0, 3);
-  if (!top.length) return null;
-  const lead = top[0];
+  if (!top.length) return <p className="muted small">No leakage data available.</p>;
   return (
-    <>
-      <p className="leakage-summary-line">Suggested focus: start with <strong>{lead.category}</strong> &mdash; it has the highest margin lost to returns ({money(lead.margin_lost_to_returns)}, {lead.return_rate_pct.toFixed(1)}% return rate).</p>
-      <div className="leakage-row-list">
-        {top.map((r) => (
-          <div className="leakage-row leakage-row-financial" key={r.category}>
-            <span className="leakage-row-cat">{r.category}</span>
-            <span className="leakage-row-metrics">
-              <span className="leakage-row-metric"><b>{money(r.margin_lost_to_returns)}</b><i>margin lost</i></span>
-              <span className="leakage-row-metric"><b>{r.return_rate_pct.toFixed(1)}%</b><i>return rate</i></span>
-              <span className="leakage-row-metric"><b>{number(r.returned_items)}</b><i>returned</i></span>
-            </span>
-          </div>
-        ))}
+    <div className="mini-list">
+      {top.map((r) => (
+        <div className="mini-list-row" key={r.category}>
+          <span className="mini-list-cat" title={r.category}>{r.category}</span>
+          <span className="mini-list-value">{money(r.margin_lost_to_returns)}</span>
+          <span className="mini-list-sub muted small">{r.return_rate_pct.toFixed(1)}%</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Dashboard-only: Channel mix as a compact source-mix widget -- one big
+// split bar, paid/organic labels, a dominant-source chip, small item-count
+// denominator -- instead of the trend chart ChannelChart renders (that
+// component stays untouched, still used by Ask Loupe's channel_analysis
+// evidence). Reuses the existing .dot/.pill color utility classes rather
+// than the shared ChannelSnapshot component's own markup/classes.
+function ChannelMixWidget({ month }: { month: ChannelMonthRow }) {
+  const paidPct = month.paid_share_pct;
+  const organicPct = Math.max(0, 100 - paidPct);
+  const dominant = paidPct >= 50 ? "Paid" : "Organic";
+  return (
+    <div className="mix-widget">
+      <div className="mix-bar-track"><span className="mix-bar-paid" style={{ width: `${paidPct}%` }} /><span className="mix-bar-organic" style={{ width: `${organicPct}%` }} /></div>
+      <div className="mix-legend">
+        <span><i className="dot dot-paid" />Paid {paidPct.toFixed(1)}%</span>
+        <span><i className="dot dot-organic" />Organic {organicPct.toFixed(1)}%</span>
       </div>
-    </>
+      <div className="mix-foot">
+        <span className={`pill ${dominant === "Paid" ? "pill-watch" : "pill-healthy"}`}>{dominant} dominant</span>
+        <span className="muted small">{number(month.total)} items</span>
+      </div>
+    </div>
   );
 }
 
@@ -1001,6 +1022,32 @@ function Stat({ label, value, change, note, icon: Icon }: { label: string; value
       </div>
       {note && <div className="metric-tile-note muted small">{note}</div>}
     </Card>
+  );
+}
+
+// Dashboard-only KPI tile: label+icon, value+delta, and a thin spark/
+// progress fill derived from the same change_pct/value the tile already
+// displays -- a visual encoding of the number shown, not a new data source.
+// `invertTone` flips up/down coloring for metrics where a rise is bad
+// (return rate).
+function DashKpiTile({
+  icon: Icon, label, value, changePct, changeSuffix = "%", invertTone = false, sparkPct, badge,
+}: {
+  icon: ComponentType<{ size?: number }>; label: string; value: string; changePct: number | null;
+  changeSuffix?: string; invertTone?: boolean; sparkPct: number; badge?: ReactNode;
+}) {
+  const rawTone = changePct === null ? "neutral" : changePct > 0 ? "up" : changePct < 0 ? "down" : "neutral";
+  const tone = invertTone && rawTone !== "neutral" ? (rawTone === "up" ? "down" : "up") : rawTone;
+  return (
+    <div className="dash-kpi-tile">
+      <div className="dash-kpi-head"><span className="dash-kpi-icon"><Icon size={13} /></span>{label}</div>
+      <div className="dash-kpi-value-row">
+        <span className="dash-kpi-value">{value}</span>
+        <span className={`dash-kpi-delta dash-kpi-delta-${tone}`}>{delta(changePct, changeSuffix)}</span>
+        {badge}
+      </div>
+      <div className="dash-kpi-spark-track"><span className={`dash-kpi-spark-fill dash-kpi-spark-${tone}`} style={{ width: `${Math.max(4, Math.min(100, sparkPct))}%` }} /></div>
+    </div>
   );
 }
 
@@ -1112,29 +1159,29 @@ export default function Page() {
     return candidates.length ? [...candidates].sort((a, b) => b.revenue - a.revenue)[0] : null;
   })();
 
-  const actionQueueItems: ActionRow[] = [];
+  const feedItems: FeedItem[] = [];
   if (topPriorityLeakageRow) {
-    actionQueueItems.push({
+    feedItems.push({
       icon: TrendingDown,
-      title: `Investigate ${topPriorityLeakageRow.category}`,
-      reason: `Top returns-priority category (${topPriorityLeakageRow.quadrant}) in the Returns priority map.`,
-      metric: money(topPriorityLeakageRow.margin_lost_to_returns),
+      title: `${topPriorityLeakageRow.category} returns leak`,
+      metric: `${money(topPriorityLeakageRow.margin_lost_to_returns)} lost`,
+      priority: topPriorityLeakageRow.quadrant === "Act Now" ? "high" : "medium",
     });
   }
   if (highRevHighReturnCategory) {
-    actionQueueItems.push({
+    feedItems.push({
       icon: TriangleAlert,
-      title: `Review ${highRevHighReturnCategory.category}`,
-      reason: "High revenue paired with an above-median return rate among displayed categories.",
+      title: `${highRevHighReturnCategory.category} return risk`,
       metric: `${highRevHighReturnCategory.return_rate_pct.toFixed(1)}% return`,
+      priority: "medium",
     });
   }
   if (topRegionRow && top3RegionShare >= 40) {
-    actionQueueItems.push({
+    feedItems.push({
       icon: MapPin,
-      title: `Watch ${topRegionRow.state}`,
-      reason: `Top 3 regions concentrate ${top3RegionShare.toFixed(0)}% of displayed regional revenue.`,
-      metric: money(topRegionRow.revenue),
+      title: `${topRegionRow.state} concentration`,
+      metric: `Top 3 = ${top3RegionShare.toFixed(0)}%`,
+      priority: "medium",
     });
   }
   if (latestChannelMonth) {
@@ -1142,11 +1189,11 @@ export default function Page() {
     if (paidPct >= 65 || paidPct <= 35) {
       const dominant = paidPct >= 65 ? "Paid" : "Organic";
       const dominantShare = paidPct >= 65 ? paidPct : 100 - paidPct;
-      actionQueueItems.push({
+      feedItems.push({
         icon: Megaphone,
-        title: "Monitor channel mix",
-        reason: `${dominant} channels currently drive ${dominantShare.toFixed(1)}% of order items.`,
-        metric: dominant,
+        title: `${dominant}-heavy mix`,
+        metric: `${dominantShare.toFixed(1)}% ${dominant.toLowerCase()}`,
+        priority: "info",
       });
     }
   }
@@ -1154,7 +1201,7 @@ export default function Page() {
   return (
     <AppShell active="loupe" brand="Loupe" brandIcon={ScanSearch} navigation={nav}>
       <div className="dashboard-surface">
-        <header className="hero-panel page-header">
+        <header className={`hero-panel page-header${activeView === "dashboard" ? " page-header-compact" : ""}`}>
           <div><div className="eyebrow">ASSISTANT LAYER</div><h1>Commerce intelligence</h1><div className="muted">Live performance from governed warehouse data</div></div>
           <div className="actions"><Badge><Database size={15} />{data?.data_source ?? "BigQuery"}</Badge></div>
         </header>
@@ -1189,18 +1236,15 @@ export default function Page() {
           </>}
 
           {activeView === "dashboard" && <div className="dash-surface">
-            <section><div className="metric-grid">
-              <Stat icon={DollarSign} label="Revenue" value={money(data.revenue.value)} change={delta(data.revenue.change_pct)} note="vs. prior period" />
-              <Stat icon={Percent} label="Margin" value={money(data.revenue.value * (data.gross_margin_pct.value / 100))} change={delta(data.gross_margin_pct.change_pct, " pts")} note="vs. prior period" />
-              <Card className="metric-tile">
-                <div className="stat-label"><span className="metric-tile-icon"><RotateCcw size={13} /></span>Return rate</div>
-                <div className="stat-line">
-                  <span className="stat-value">{data.return_rate_pct.value.toFixed(1)}%</span>
-                  <span className="delta">{delta(data.return_rate_pct.change_pct, " pts")}</span>
-                  <span className={`pill ${returnRatePill(data.return_rate_pct.value).cls}`}>{returnRatePill(data.return_rate_pct.value).label}</span>
-                </div>
-              </Card>
-              <Stat icon={ShoppingBag} label="Items sold" value={number(data.order_items.value)} change={delta(data.order_items.change_pct)} note="vs. prior period" />
+            <section><div className="dash-kpi-row">
+              <DashKpiTile icon={DollarSign} label="Revenue" value={money(data.revenue.value)} changePct={data.revenue.change_pct} sparkPct={Math.abs(data.revenue.change_pct ?? 0) * 5} />
+              <DashKpiTile icon={Percent} label="Margin" value={money(data.revenue.value * (data.gross_margin_pct.value / 100))} changePct={data.gross_margin_pct.change_pct} changeSuffix=" pts" sparkPct={Math.abs(data.gross_margin_pct.change_pct ?? 0) * 10} />
+              <DashKpiTile
+                icon={RotateCcw} label="Return rate" value={`${data.return_rate_pct.value.toFixed(1)}%`} changePct={data.return_rate_pct.change_pct} changeSuffix=" pts" invertTone
+                sparkPct={(data.return_rate_pct.value / 30) * 100}
+                badge={<span className={`pill ${returnRatePill(data.return_rate_pct.value).cls}`}>{returnRatePill(data.return_rate_pct.value).label}</span>}
+              />
+              <DashKpiTile icon={ShoppingBag} label="Items sold" value={number(data.order_items.value)} changePct={data.order_items.change_pct} sparkPct={Math.abs(data.order_items.change_pct ?? 0) * 5} />
             </div></section>
 
             <section>
@@ -1222,32 +1266,41 @@ export default function Page() {
               </div>
             </section>
 
-            {/* One CSS-grid-areas layout instead of three stacked sections, so
-                Category Leaderboard flows in directly under the trend chart
-                (same grid column) instead of waiting for the right-side
-                stack's height -- that mismatch was the dead-zone bug. */}
+            {/* Dashboard block grid: overview + action feed on top (what
+                changed / what to act on), return-risk lanes + a stacked
+                channel/leakage sidebar in the middle (where the risk is),
+                top categories + region widgets below (what's driving
+                performance / where to drill in). Reusable dashboard blocks
+                instead of stacked report sections. */}
             <section><div className="dash-content-grid">
-              <SectionCard className="dash-area-bridge" icon={TrendingUp} title="Performance bridge" description="Current vs. prior period for revenue and margin, without an overlapping line chart.">
-                <PerformanceBridge overview={data} />
+              <SectionCard className="dash-area-overview" icon={TrendingUp} title="Overview">
+                <OverviewMiniGrid overview={data} />
               </SectionCard>
 
-              <SectionCard className="dash-area-actions" icon={ListChecks} title="Executive action queue" description="Where to focus next, generated from the data already on this dashboard.">
-                <ExecutiveActionQueue actions={actionQueueItems.slice(0, 4)} />
+              <SectionCard className="dash-area-actions" icon={ListChecks} title="Action queue">
+                <ActionFeed items={feedItems.slice(0, 4)} />
               </SectionCard>
 
-              <SectionCard className="dash-area-matrix" icon={Target} title="Returns priority map" description="Combines margin lost, return rate, and return volume to show where to act first.">
-                {!leakageRows ? <div className="muted small">Loading leakage data&hellip;</div> : <ReturnsPriorityMap rows={leakageRows} />}
+              <SectionCard className="dash-area-lanes" icon={Target} title="Return risk by category">
+                {!leakageRows ? <div className="muted small">Loading leakage data&hellip;</div> : <ReturnRiskLanes rows={leakageRows} />}
               </SectionCard>
 
-              <SectionCard className="dash-area-leakage" icon={TrendingDown} title="Returns leakage snapshot" description="Top categories losing margin to returns.">
-                {!leakageRows ? <div className="muted small">Loading leakage data&hellip;</div> : leakageRows.length === 0 ? <div className="muted small">No leakage data available.</div> : <ReturnsLeakageSnapshot rows={leakageRows} />}
-              </SectionCard>
+              <div className="dash-area-sidebar">
+                <SectionCard
+                  className="dash-sidebar-card" icon={Megaphone} title="Channel mix"
+                  action={channelMonths && channelMonths.length > 0 && <button className="button" onClick={() => downloadCsv("channel_mix.csv", channelMonths)}><Download size={14} />CSV</button>}
+                >
+                  {!latestChannelMonth ? <div className="muted small">Loading channel mix&hellip;</div> : <ChannelMixWidget month={latestChannelMonth} />}
+                </SectionCard>
+                <SectionCard className="dash-sidebar-card" icon={TrendingDown} title="Top leakage">
+                  {!leakageRows ? <div className="muted small">Loading&hellip;</div> : <TopLeakageMini rows={leakageRows} />}
+                </SectionCard>
+              </div>
 
               <SectionCard
                 className="dash-area-leaderboard"
                 icon={Trophy}
-                title="Category leaderboard"
-                description={`Top 8 by ${sortMetric.replaceAll("_", " ")}, computed from the same order-item grain as the KPIs above.`}
+                title="Top categories"
                 action={<div className="actions">
                   <select className="select" value={sortMetric} onChange={(e) => setSortMetric(e.target.value as typeof sortMetric)}><option value="revenue">Revenue</option><option value="margin">Margin</option><option value="return_rate_pct">Return rate</option></select>
                   {categoryRows && <button className="button" onClick={() => downloadCsv("category_breakdown.csv", categoryRows)}><Download size={14} />CSV</button>}
@@ -1267,50 +1320,27 @@ export default function Page() {
                   </>;
                 })()}
               </SectionCard>
+
               <SectionCard
                 className="dash-area-region"
                 icon={MapPin}
                 title="Revenue by region"
-                description="Top 10 regions by revenue, share of the total shown region-to-region."
                 action={stateRows && <button className="button" onClick={() => downloadCsv("region_breakdown.csv", stateRows)}><Download size={14} />CSV</button>}
               >
                 {!rankedStateRows ? <div className="muted small">Loading region breakdown&hellip;</div> : rankedStateRows.length === 0 ? <div className="muted small">No region data in this window.</div> : (
                   <>
                     <MiniStatStrip items={[
                       { label: "Top region", value: topRegionRow!.state_abbrev || topRegionRow!.state },
-                      { label: "Top revenue", value: money(topRegionRow!.revenue) },
                       { label: "Top 3 share", value: `${top3RegionShare.toFixed(0)}%` },
                       { label: "Regions shown", value: String(rankedStateRows.length) },
                     ]} />
-                    <p className="dash-insight-line muted small">Top 3 regions contribute {top3RegionShare.toFixed(0)}% of displayed regional revenue, led by {topRegionRow!.state}.</p>
-                    <div className="state-bars">{rankedStateRows.map((s) => (
-                      <div key={s.state} className="state-bar-row">
-                        <span className="state-bar-label">{s.state_abbrev || s.state}</span>
-                        <span className="state-bar-track"><span className="state-bar-fill" style={{ width: `${maxStateRevenue ? (s.revenue / maxStateRevenue) * 100 : 0}%` }} /></span>
-                        <span className="state-bar-value muted small">{money(s.revenue)}</span>
-                        <span className="state-bar-share muted small">{regionTotalRevenue ? `${((s.revenue / regionTotalRevenue) * 100).toFixed(0)}%` : ""}</span>
+                    <div className="region-list">{rankedStateRows.map((s) => (
+                      <div key={s.state} className="region-row">
+                        <span className="region-row-label">{s.state_abbrev || s.state}</span>
+                        <span className="region-row-track"><span className="region-row-fill" style={{ width: `${maxStateRevenue ? (s.revenue / maxStateRevenue) * 100 : 0}%` }} /></span>
+                        <span className="region-row-value">{money(s.revenue)}</span>
                       </div>
                     ))}</div>
-                  </>
-                )}
-              </SectionCard>
-
-              <SectionCard
-                className="dash-area-channel"
-                icon={Megaphone}
-                title="Paid vs. organic channel mix"
-                description="Share of order items from paid channels (Facebook, Display, Email) vs. organic/direct (Search, Organic)."
-                action={channelMonths && channelMonths.length > 0 && <button className="button" onClick={() => downloadCsv("channel_mix.csv", channelMonths)}><Download size={14} />CSV</button>}
-              >
-                {!latestChannelMonth ? <div className="muted small">Loading channel mix&hellip;</div> : (
-                  <>
-                    <MiniStatStrip items={[
-                      { label: "Paid", value: `${latestChannelMonth.paid_share_pct.toFixed(1)}%` },
-                      { label: "Organic", value: `${(100 - latestChannelMonth.paid_share_pct).toFixed(1)}%` },
-                      { label: "Latest denominator", value: `${number(latestChannelMonth.total)} items` },
-                      { label: "Dominant source", value: latestChannelMonth.paid_share_pct >= 50 ? "Paid" : "Organic" },
-                    ]} />
-                    <ChannelChart months={channelMonths!} compact />
                   </>
                 )}
               </SectionCard>

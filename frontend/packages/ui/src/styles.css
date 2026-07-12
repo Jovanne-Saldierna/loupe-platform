@@ -79,6 +79,15 @@ button, input, textarea, select { font: inherit; }
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
 .eyebrow { color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
 .page-header h1 { font-size: 42px; line-height: 1.15; margin: 5px 0 3px; }
+
+/* Compact app-dashboard header variant, applied only on the Dashboard tab
+   (Home/Performance keep the full hero header untouched) -- smaller title
+   and tighter padding so the header reads as a dashboard title bar with a
+   live-source badge, not a large hero/report header. */
+.hero-panel.page-header-compact { padding: 16px 22px; align-items: center; }
+.page-header-compact h1 { font-size: 22px; margin: 2px 0 1px; }
+.page-header-compact .eyebrow { font-size: 10.5px; }
+.page-header-compact .muted { font-size: 12.5px; }
 .muted { color: var(--muted-foreground); }
 .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
@@ -264,6 +273,15 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .leaderboard-bar-track { height: 3px; border-radius: 999px; background: var(--muted); overflow: hidden; }
 .leaderboard-bar-fill { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
 .leaderboard-cell { font-size: 13px; text-align: right; white-space: nowrap; }
+/* Dense dashboard table style for "Top categories" -- tighter rows/type
+   and a smaller insight-tile variant than the default (used elsewhere at
+   full size), so the widget reads as a compact product table. */
+.dash-area-leaderboard .leaderboard-row { padding: 5px 6px; }
+.dash-area-leaderboard .leaderboard-cat { font-size: 12.5px; }
+.dash-area-leaderboard .leaderboard-cell { font-size: 12.5px; }
+.dash-area-leaderboard .insight-tile { padding: 6px 8px; }
+.dash-area-leaderboard .insight-tile-name { font-size: 12px; }
+.dash-area-leaderboard .insight-tile-value { font-size: 11px; }
 @media (max-width: 700px) {
   .leaderboard-head { display: none; }
   .leaderboard-row { grid-template-columns: 18px 1fr; row-gap: 4px; }
@@ -308,39 +326,39 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .dash-toolbar .reset-filters-btn { padding: 5px 11px; font-size: 12px; }
 .dash-toolbar .msd { min-width: 150px; }
 
-/* One CSS-grid-areas layout for everything below the toolbar. Reads as a
-   story top-to-bottom: performance (bridge) + action queue, then risk
-   (returns priority map) + leakage detail, then drivers (leaderboard +
-   region), then channel mix full-width. Data Confidence is deliberately
-   NOT in this grid -- it's trust metadata, not business insight, so it
-   lives in its own quiet full-width strip below (.dash-confidence-strip). */
+/* One CSS-grid-areas layout for everything below the toolbar -- dashboard
+   blocks, not report sections. Reads top-to-bottom: what changed (overview)
+   + what to act on (action feed), then where risk is (return-risk lanes) +
+   a stacked channel-mix/top-leakage sidebar, then what's driving
+   performance / where to drill in (top categories + region). Data
+   Confidence is deliberately NOT in this grid -- it's trust metadata, not
+   business insight, so it lives in its own quiet full-width strip below
+   (.dash-confidence-strip). */
 .dash-content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) minmax(320px, .8fr);
   grid-template-areas:
-    "bridge      actions"
-    "matrix      leakage"
-    "leaderboard region"
-    "channel     channel";
-  gap: 20px;
+    "overview    actions"
+    "lanes       sidebar"
+    "leaderboard region";
+  gap: 16px;
   align-items: start;
 }
-.dash-area-bridge { grid-area: bridge; }
+.dash-area-overview { grid-area: overview; }
 .dash-area-actions { grid-area: actions; }
-.dash-area-leakage { grid-area: leakage; }
-.dash-area-matrix { grid-area: matrix; }
+.dash-area-lanes { grid-area: lanes; }
+.dash-area-sidebar { grid-area: sidebar; display: flex; flex-direction: column; gap: 16px; }
 .dash-area-leaderboard { grid-area: leaderboard; }
 .dash-area-region { grid-area: region; }
-.dash-area-channel { grid-area: channel; }
-/* Actions/Leakage run narrower than the main column, so trim the base
-   32px card padding down to keep them reading as compact admin-panel
-   modules instead of the same spacious card used for the big bridge card. */
-.dash-area-actions, .dash-area-leakage { padding: 20px 22px; }
+/* Actions/sidebar cards run narrower than the main column, so trim the
+   base 32px card padding down to keep them reading as compact admin-panel
+   modules instead of the same spacious card used for the wide blocks. */
+.dash-area-actions, .dash-sidebar-card { padding: 18px 20px; }
 
 @media (max-width: 1280px) {
   .dash-content-grid {
     grid-template-columns: 1fr;
-    grid-template-areas: "bridge" "actions" "matrix" "leakage" "leaderboard" "region" "channel";
+    grid-template-areas: "overview" "actions" "lanes" "sidebar" "leaderboard" "region";
   }
   .dash-toolbar { align-items: stretch; }
 }
@@ -608,7 +626,7 @@ select[multiple].select { min-height: 84px; padding: 6px; }
    the 24px default so cards read as a tight admin surface, not oversized
    marketing panels. */
 .dash-surface .card { padding: 22px; border-radius: 16px; box-shadow: 0 1px 2px rgba(16, 24, 40, .05); }
-.dash-surface .dash-area-leakage, .dash-surface .dash-area-actions { padding: 18px 20px; }
+.dash-surface .dash-area-actions, .dash-surface .dash-sidebar-card { padding: 16px 18px; }
 
 /* Card headers: compact icon+title row, smaller title, tighter description. */
 .dash-surface .card-head { margin-bottom: 10px; gap: 10px; }
@@ -680,16 +698,12 @@ select[multiple].select { min-height: 84px; padding: 6px; }
   .insight-tiles { grid-template-columns: 1fr; }
 }
 
-/* --- Returns priority map -------------------------------------------------
-   Dense 2-column grid of compact priority rows (category, priority badge,
-   margin lost, return rate, returned items, impact bar) -- replaces an
-   earlier bubble-scatter attempt that crowded because return_rate_pct
-   values in this dataset cluster tightly, causing overlapping labels along
-   a narrow x-axis band. A sorted, classified list stays readable regardless
-   of how spread out (or clustered) the underlying numbers are. Colors reuse
-   the same risk/watch/healthy/accent tokens already used elsewhere on the
-   dashboard (pill-risk red, pill-watch amber, pill-healthy green, accent
-   blue) instead of introducing a new palette. */
+/* --- Return risk by category (priority lanes) -----------------------------
+   Kanban-style board -- four lanes (Act Now / Margin Recovery / Watchlist /
+   Stable), each holding up to 3 compact category chips -- replacing the
+   earlier long ranked priority-row list so returns risk reads as a board
+   scan, not a report. Colors reuse the same risk/watch/healthy/accent
+   tokens already used elsewhere on the dashboard instead of a new palette. */
 .matrix-legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 8px; }
 .matrix-legend-item { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted-foreground); }
 .matrix-legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
@@ -698,79 +712,141 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .matrix-watchlist .matrix-legend-dot { background: #b7791f; }
 .matrix-stable .matrix-legend-dot { background: #1b7a43; }
 
-.priority-map-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.priority-row {
-  display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 7px 10px;
+.risk-lanes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.risk-lane { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.risk-lane-head {
+  display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 650;
+  text-transform: uppercase; letter-spacing: .02em; color: var(--muted-foreground);
+}
+.risk-lane-chips { display: flex; flex-direction: column; gap: 6px; }
+.risk-lane-empty { padding: 6px 2px; }
+.risk-chip {
+  display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 8px 9px;
   border-radius: 10px; background: var(--muted); border-left: 3px solid var(--border);
 }
-.matrix-act-now.priority-row { border-left-color: #c0362c; }
-.matrix-margin-recovery.priority-row { border-left-color: var(--accent); }
-.matrix-watchlist.priority-row { border-left-color: #b7791f; }
-.matrix-stable.priority-row { border-left-color: #1b7a43; }
+.matrix-act-now .risk-chip, .risk-lane.matrix-act-now .risk-chip { border-left-color: #c0362c; }
+.matrix-margin-recovery .risk-chip, .risk-lane.matrix-margin-recovery .risk-chip { border-left-color: var(--accent); }
+.matrix-watchlist .risk-chip, .risk-lane.matrix-watchlist .risk-chip { border-left-color: #b7791f; }
+.matrix-stable .risk-chip, .risk-lane.matrix-stable .risk-chip { border-left-color: #1b7a43; }
+.risk-chip-cat { font-size: 12.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.risk-chip-metrics { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; color: var(--muted-foreground); }
+.risk-chip-track { display: block; height: 4px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.risk-chip-fill { display: block; height: 100%; border-radius: inherit; }
+.matrix-act-now .risk-chip-fill { background: #c0362c; }
+.matrix-margin-recovery .risk-chip-fill { background: var(--accent); }
+.matrix-watchlist .risk-chip-fill { background: #b7791f; }
+.matrix-stable .risk-chip-fill { background: #1b7a43; }
 
-.priority-row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.priority-row-cat { font-size: 13px; font-weight: 650; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.priority-badge { flex: 0 0 auto; font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .02em; padding: 2px 7px; border-radius: 999px; color: #fff; white-space: nowrap; }
-.matrix-act-now .priority-badge { background: #c0362c; }
-.matrix-margin-recovery .priority-badge { background: var(--accent); }
-.matrix-watchlist .priority-badge { background: #b7791f; }
-.matrix-stable .priority-badge { background: #1b7a43; }
-
-.priority-row-metrics { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
-.priority-metric { display: flex; flex-direction: column; line-height: 1.2; }
-.priority-metric b { font-size: 12.5px; font-weight: 700; }
-.priority-metric i { font-size: 10px; font-style: normal; color: var(--muted-foreground); white-space: nowrap; }
-.priority-metric-items { margin-left: auto; text-align: right; }
-.priority-rate-pill { font-size: 11px; font-weight: 650; background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
-
-/* Impact bar (margin lost) is the primary, taller indicator; the returned-
-   items bar underneath is a thinner secondary volume cue. */
-.priority-impact-track { display: block; height: 5px; border-radius: 999px; background: var(--border); overflow: hidden; }
-.priority-impact-fill { display: block; height: 100%; background: currentColor; border-radius: inherit; }
-.matrix-act-now .priority-impact-fill { background: #c0362c; }
-.matrix-margin-recovery .priority-impact-fill { background: var(--accent); }
-.matrix-watchlist .priority-impact-fill { background: #b7791f; }
-.matrix-stable .priority-impact-fill { background: #1b7a43; }
-.priority-items-track { display: block; height: 3px; border-radius: 999px; background: var(--border); overflow: hidden; }
-.priority-items-fill { display: block; height: 100%; background: var(--muted-foreground); border-radius: inherit; opacity: .6; }
-
-@media (max-width: 640px) {
-  .priority-map-grid { grid-template-columns: 1fr; }
+@media (max-width: 900px) {
+  .risk-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .risk-lanes { grid-template-columns: 1fr; }
 }
 
-/* --- Performance bridge --------------------------------------------------
-   Current-vs-prior comparison bars, replacing the old overlapping revenue/
-   margin area chart. Two stacked mini bar-pairs (prior/current) instead of
-   a line chart -- reads correctly even when the underlying series is short
-   or noisy, and needs no axis. */
-.bridge-bars { display: flex; flex-direction: column; gap: 12px; margin-bottom: 10px; }
-.bridge-metric-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12.5px; font-weight: 650; margin-bottom: 6px; }
-.bridge-bar-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 8px; margin-top: 4px; }
-.bridge-bar-label { text-align: right; }
-.bridge-bar-track { height: 9px; border-radius: 999px; background: var(--muted); overflow: hidden; }
-.bridge-bar-fill { display: block; height: 100%; border-radius: inherit; }
-.bridge-bar-prior { background: var(--border); }
-.bridge-bar-current { background: var(--accent); }
-.bridge-bar-value { text-align: right; white-space: nowrap; font-size: 12.5px; font-weight: 650; min-width: 64px; }
+/* --- Dashboard KPI row -----------------------------------------------------
+   Dashboard-only metric blocks (Revenue/Margin/Return rate/Items sold) --
+   separate from the shared .metric-tile/Stat used on Home/Performance so
+   this tile shape (value + delta pill + thin spark/progress fill) never
+   changes how those other tabs render. */
+.dash-kpi-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.dash-kpi-tile { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
+.dash-kpi-head { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted-foreground); }
+.dash-kpi-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 7px; background: var(--accent-soft); color: var(--accent); }
+.dash-kpi-value-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.dash-kpi-value { font-size: 24px; font-weight: 650; line-height: 1.1; white-space: nowrap; }
+.dash-kpi-delta { display: inline-flex; align-items: center; font-size: 12px; font-weight: 650; padding: 2px 7px; border-radius: 999px; }
+.dash-kpi-delta-up { color: #1b7a43; background: #e7f7ee; }
+.dash-kpi-delta-down { color: #c0362c; background: #fdecec; }
+.dash-kpi-delta-neutral { color: var(--muted-foreground); background: var(--muted); }
+.dash-kpi-spark-track { height: 4px; border-radius: 999px; background: var(--muted); overflow: hidden; margin-top: 10px; }
+.dash-kpi-spark-fill { display: block; height: 100%; border-radius: inherit; }
+.dash-kpi-spark-up { background: #1b7a43; }
+.dash-kpi-spark-down { background: #c0362c; }
+.dash-kpi-spark-neutral { background: var(--muted-foreground); opacity: .5; }
+@media (max-width: 1100px) {
+  .dash-kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .dash-kpi-row, .overview-mini-grid { grid-template-columns: 1fr; }
+}
 
-/* --- Executive action queue ----------------------------------------------
-   3-4 compact recommendation rows, each generated from data another card on
-   this dashboard already renders (returns leakage, category, region,
-   channel), so the queue and the cards it references never disagree. */
-.action-queue { display: flex; flex-direction: column; gap: 6px; }
-.action-row { display: flex; align-items: flex-start; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--border); }
-.action-row:last-child { border-bottom: 0; padding-bottom: 0; }
-.action-row-icon { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 7px; background: var(--accent-soft); color: var(--accent); margin-top: 1px; }
-.action-row-body { flex: 1 1 auto; min-width: 0; }
-.action-row-title { font-size: 12.5px; font-weight: 650; }
-.action-row-reason { line-height: 1.35; margin-top: 1px; }
-.action-row-metric { flex: 0 0 auto; font-size: 12px; font-weight: 650; color: var(--muted-foreground); white-space: nowrap; align-self: center; }
+/* --- Overview mini-card grid -----------------------------------------------
+   Replaces the old narrative Performance Bridge card with a 2x2 grid of
+   compact current-vs-prior/status tiles -- short labels only, no paragraph. */
+.overview-mini-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.mini-compare-card { background: var(--muted); border-radius: 12px; padding: 11px 13px; min-width: 0; }
+.mini-card-head { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; color: var(--muted-foreground); }
+.mini-card-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); flex: 0 0 auto; }
+.mini-card-delta { margin-left: auto; font-size: 11px; font-weight: 650; padding: 1px 6px; border-radius: 999px; white-space: nowrap; }
+.mini-card-delta-up { color: #1b7a43; background: #e7f7ee; }
+.mini-card-delta-down { color: #c0362c; background: #fdecec; }
+.mini-card-delta-neutral { color: var(--muted-foreground); background: var(--border); }
+.mini-card-value { font-size: 18px; font-weight: 650; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-card-bar-track { height: 4px; border-radius: 999px; background: var(--border); overflow: hidden; margin-top: 7px; }
+.mini-card-bar-fill { display: block; height: 100%; border-radius: inherit; }
+.mini-card-bar-up { background: #1b7a43; }
+.mini-card-bar-down { background: #c0362c; }
+.mini-card-bar-neutral { background: var(--muted-foreground); opacity: .5; }
+.mini-card-sub { margin-top: 5px; }
+.mini-card-status { display: inline-block; margin-top: 7px; font-size: 11px; font-weight: 650; padding: 2px 8px; border-radius: 999px; }
+.mini-card-status-up { color: #1b7a43; background: #e7f7ee; }
+.mini-card-status-down { color: #c0362c; background: #fdecec; }
+.mini-card-status-neutral { color: var(--muted-foreground); background: var(--border); }
+
+/* --- Action queue feed ------------------------------------------------------
+   App activity-feed rows: priority dot, icon, short action label, metric
+   pill -- no explanation paragraph. Same underlying signals as before
+   (returns leakage, category, region, channel). */
+.action-feed { display: flex; flex-direction: column; gap: 2px; }
+.feed-row { display: flex; align-items: center; gap: 8px; padding: 8px 2px; border-bottom: 1px solid var(--border); }
+.feed-row:last-child { border-bottom: 0; padding-bottom: 2px; }
+.feed-dot { flex: 0 0 auto; display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+.feed-dot-high { background: #c0362c; }
+.feed-dot-medium { background: #b7791f; }
+.feed-dot-info { background: var(--accent); }
+.feed-icon { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 7px; background: var(--muted); color: var(--muted-foreground); }
+.feed-title { flex: 1 1 auto; min-width: 0; font-size: 12.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.feed-metric { flex: 0 0 auto; font-size: 11.5px; font-weight: 650; color: var(--muted-foreground); white-space: nowrap; }
+
+/* --- Top leakage mini-widget ------------------------------------------------
+   Three compact rows, no paragraph -- the merge target absorbing the old,
+   separate Returns Leakage Snapshot card so the Dashboard doesn't carry two
+   large returns-focused sections. */
+.mini-list { display: flex; flex-direction: column; gap: 2px; }
+.mini-list-row { display: flex; align-items: center; gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--border); }
+.mini-list-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.mini-list-cat { flex: 1 1 auto; min-width: 0; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-list-value { flex: 0 0 auto; font-size: 12.5px; font-weight: 650; }
+.mini-list-sub { flex: 0 0 auto; min-width: 34px; text-align: right; }
+
+/* --- Channel mix widget ------------------------------------------------
+   Big split bar + labels + dominant-source chip + small denominator --
+   Dashboard-only classes, separate from the shared ChannelSnapshot markup
+   Ask Loupe's channel_analysis evidence renders. */
+.mix-widget { display: flex; flex-direction: column; gap: 10px; }
+.mix-bar-track { display: flex; height: 20px; border-radius: 999px; overflow: hidden; background: var(--muted); }
+.mix-bar-paid { display: block; height: 100%; background: var(--accent); }
+.mix-bar-organic { display: block; height: 100%; background: #c7d2fe; }
+.mix-legend { display: flex; gap: 16px; font-size: 12.5px; }
+.mix-legend span { display: flex; align-items: center; gap: 6px; }
+.mix-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+/* --- Revenue by region widget ------------------------------------------
+   Compact "sales by region" rows -- right-aligned values, small progress
+   bars, tight vertical rhythm. */
+.region-list { display: flex; flex-direction: column; gap: 6px; }
+.region-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.region-row-label { font-size: 12px; font-weight: 650; color: var(--muted-foreground); }
+.region-row-track { height: 8px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.region-row-fill { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+.region-row-value { text-align: right; font-size: 12.5px; font-weight: 650; white-space: nowrap; }
 
 /* --- Data confidence strip ------------------------------------------------
    Trust metadata demoted to a quiet, full-width footer instead of a card in
    the prime right column -- smaller type, no border/shadow beyond a single
    top hairline, so it visually reads as status text, not an insight. */
-.dash-confidence-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 12px 4px 0; border-top: 1px solid var(--border); }
+.dash-confidence-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 24px; padding: 10px 4px 0; border-top: 1px solid var(--border); opacity: .85; }
 .confidence-strip-head { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; color: var(--muted-foreground); flex: 0 0 auto; }
 .confidence-strip-head svg { color: var(--muted-foreground); }
 .confidence-strip-row { display: flex; flex-wrap: wrap; gap: 18px; flex: 1 1 auto; }
