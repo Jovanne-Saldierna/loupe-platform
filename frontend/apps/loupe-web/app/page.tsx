@@ -6,7 +6,7 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContai
 import {
   ArrowRight, ChartNoAxesCombined, Database, DollarSign, Download, Eye, Home as HomeIcon, LayoutDashboard,
   Lightbulb, ListChecks, MapPin, Megaphone, MessageSquareText, PackageSearch, ScanSearch, Shirt, SlidersHorizontal,
-  Sparkles, TriangleAlert, TrendingDown, TrendingUp,
+  Sparkles, Target, TriangleAlert, TrendingDown, TrendingUp,
 } from "lucide-react";
 import { AppShell, Badge, Card, Unavailable } from "@loupe/ui";
 
@@ -23,7 +23,7 @@ type Overview = {
 type CategoryRow = { category: string; revenue: number; margin: number; items: number; return_rate_pct: number };
 type StateRow = { state: string; state_abbrev: string; revenue: number; margin: number; items: number };
 type ChannelMonthRow = { month: string; paid: number; unpaid: number; total: number; paid_share_pct: number };
-type LeakageRow = { category: string; returned_items: number; total_items: number; return_rate_pct: number; margin_lost_to_returns: number };
+type LeakageRow = { category: string; revenue?: number; margin?: number; returned_items: number; total_items: number; return_rate_pct: number; margin_lost_to_returns: number };
 type Benchmark = { avg_margin_pct: number; avg_return_rate_pct: number };
 type AskResponse = { category: string; answer: string; source_health_status: string | null; source_health_warning: string | null; raw_data: unknown };
 
@@ -419,14 +419,140 @@ function QuickAsk({ subtitle, prompts, onAsk, disabled }: { subtitle: string; pr
   );
 }
 
+// --- returns_leakage insight modules ---------------------------------------
+// The model (apps/loupe_agent/chat.py's _LEAKAGE_SYSTEM) writes each section
+// as free-form prose, not structured fields. To turn that into scannable
+// "product insight modules" instead of paragraph blocks, category-level
+// numbers for the chips below are read directly from response.raw_data (the
+// same ranked leakage table BigQuery returned -- real numbers, nothing
+// invented), while the prose itself is only reformatted for display: split
+// into sentences and shown as a capped bullet list with any remainder
+// collapsed into a "Show more" details block. No wording is changed.
+function leakageRows(raw: unknown): LeakageRow[] {
+  if (!Array.isArray(raw) || !raw.length) return [];
+  const first = raw[0] as Record<string, unknown>;
+  if (!("margin_lost_to_returns" in first) || !("category" in first)) return [];
+  return raw as LeakageRow[];
+}
+function toSentences(text: string): string[] {
+  return cleanMarkdown(text)
+    .replace(/\s*\n+\s*/g, " ")
+    .trim()
+    .split(/(?<=[.!?])\s+(?=[A-Z0-9$"'—])/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+// Wraps any known category name found in a sentence with **bold** (a pure
+// display transform on the model's own words -- no text is added, removed,
+// or reworded) so a numbered action reads as "**Category** -- reason / next
+// step" at a glance instead of a flat sentence. Longest names first so e.g.
+// "Blazers & Jackets" matches before a shorter substring would.
+function highlightCategories(text: string, categories: string[]): string {
+  if (!categories.length) return text;
+  const sorted = [...categories].sort((a, b) => b.length - a.length);
+  let out = text;
+  for (const cat of sorted) {
+    if (/^\*\*/.test(cat)) continue;
+    const escaped = cat.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    out = out.replace(new RegExp(`\\b${escaped}\\b`, "gi"), (m) => `**${m}**`);
+  }
+  return out;
+}
+// Reformats one section's prose as a capped bullet/numbered list; anything
+// past the cap collapses into "Show N more" so the default view stays
+// scannable in ~10 seconds instead of reading as a long report. When
+// `highlight` (real category names from raw_data) is passed, each bullet
+// leads with its category bolded so Priority 1/2 and Recommendation read as
+// "category -- reason / next step" modules rather than plain sentences.
+function CompactBullets({ text, max = 3, ordered = false, highlight }: { text: string; max?: number; ordered?: boolean; highlight?: string[] }) {
+  const sentences = toSentences(highlight?.length ? highlightCategories(text, highlight) : text);
+  if (!sentences.length) return null;
+  const shown = sentences.slice(0, max);
+  const rest = sentences.slice(max);
+  const items = (list: string[]) => list.map((s, i) => <li key={i}>{inlineMd(s)}</li>);
+  return (
+    <>
+      {ordered ? <ol className="insight-bullets">{items(shown)}</ol> : <ul className="insight-bullets">{items(shown)}</ul>}
+      {rest.length > 0 && (
+        <details className="insight-more">
+          <summary>Show {rest.length} more</summary>
+          {ordered ? <ol className="insight-bullets" start={shown.length + 1}>{items(rest)}</ol> : <ul className="insight-bullets">{items(rest)}</ul>}
+        </details>
+      )}
+    </>
+  );
+}
+// Priority 1 / Priority 2 category chips -- top categories by the metric the
+// section is actually about (absolute margin lost vs. returned-item volume),
+// read straight from raw_data so the numbers shown are always real.
+function LeakageChips({ rows, metric }: { rows: LeakageRow[]; metric: "financial" | "operational" }) {
+  if (!rows.length) return null;
+  const top = [...rows].sort((a, b) => (metric === "financial" ? b.margin_lost_to_returns - a.margin_lost_to_returns : b.returned_items - a.returned_items)).slice(0, 5);
+  return (
+    <div className="leakage-chip-row">
+      {top.map((r) => (
+        <div className={`leakage-chip leakage-chip-${metric}`} key={r.category}>
+          <div className="leakage-chip-cat">{r.category}</div>
+          <div className="leakage-chip-metric">{metric === "financial" ? `${money(r.margin_lost_to_returns)} lost` : `${number(r.returned_items)} returned`}</div>
+          <div className="muted small">{r.return_rate_pct.toFixed(1)}% return rate</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+const WATCHLIST_NAMES = ["clothing sets", "blazers & jackets", "pants"];
+function WatchlistChips({ rows }: { rows: LeakageRow[] }) {
+  const hits = rows.filter((r) => WATCHLIST_NAMES.includes(r.category.toLowerCase()));
+  if (!hits.length) return null;
+  return (
+    <div className="leakage-chip-row">
+      {hits.map((r) => (
+        <div className="leakage-chip leakage-chip-amber" key={r.category}>
+          <div className="leakage-chip-cat">{r.category}</div>
+          <div className="leakage-chip-metric">{r.return_rate_pct.toFixed(1)}% return rate</div>
+          <div className="muted small">{money(r.margin_lost_to_returns)} lost</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+// Key Distinction as a two-column comparison: financial signal (absolute
+// margin lost) vs. operational signal (return rate / volume) -- the exact
+// two numbers the model's own explanation is contrasting.
+function DistinctionColumns({ rows }: { rows: LeakageRow[] }) {
+  if (!rows.length) return null;
+  const topFinancial = [...rows].sort((a, b) => b.margin_lost_to_returns - a.margin_lost_to_returns)[0];
+  const topOperational = [...rows].sort((a, b) => b.returned_items - a.returned_items)[0];
+  return (
+    <div className="distinction-columns">
+      <div className="distinction-col distinction-col-financial">
+        <div className="distinction-col-title"><DollarSign size={13} />Financial signal</div>
+        <div className="distinction-col-value">{topFinancial.category}</div>
+        <div className="muted small">{money(topFinancial.margin_lost_to_returns)} absolute margin lost</div>
+      </div>
+      <div className="distinction-col distinction-col-operational">
+        <div className="distinction-col-title"><PackageSearch size={13} />Operational signal</div>
+        <div className="distinction-col-value">{topOperational.category}</div>
+        <div className="muted small">{topOperational.return_rate_pct.toFixed(1)}% return rate · {number(topOperational.returned_items)} returned items</div>
+      </div>
+    </div>
+  );
+}
+
 // Ask Loupe answer hierarchy: the short headline lives in the chat bubble
 // (see the "ask" view below); this renders everything after it -- badges +
-// reporting scope, the key-metrics evidence row, then separated detail
-// sections (Baseline / Scenario / Pro Forma / Highlights / Additional
-// Detail), then Validation Notes and Recommendation callouts -- as one
-// self-contained "insight summary card" instead of a dense report dump.
+// reporting scope, the chart/evidence card, then separated detail sections
+// (Baseline / Scenario / Pro Forma / Priority 1 / Priority 2 / Highlights /
+// Additional Detail), then Watchlist / Key Distinction / Validation Notes /
+// Recommendation callouts -- as one self-contained "insight summary card"
+// instead of a dense report dump. For returns_leakage specifically, Priority
+// 1/2, Watchlist, Key Distinction, and Recommendation render as compact
+// product modules (category chips + capped bullets) rather than paragraphs.
 function AskInsightBody({ response, insight }: { response: AskResponse; insight: { headline: string; buckets: Record<string, string[]> } }) {
   const scope = reportingScopeFor(response.category, response.raw_data);
+  const rows = leakageRows(response.raw_data);
+  const isLeakage = response.category === "returns_leakage" && rows.length > 0;
+  const categoryNames = isLeakage ? rows.map((r) => r.category) : undefined;
   return (
     <div className="insight-summary-card">
       <div className="insight-brief-head">
@@ -436,30 +562,43 @@ function AskInsightBody({ response, insight }: { response: AskResponse; insight:
         </div>
         {scope && <span className="muted small insight-scope">{scope}</span>}
       </div>
-      <AskEvidence data={response.raw_data} />
+      {isLeakage ? (
+        <div className="evidence-card">
+          <div className="evidence-card-title">Margin leakage by category</div>
+          <AskEvidence data={response.raw_data} />
+        </div>
+      ) : (
+        <AskEvidence data={response.raw_data} />
+      )}
       <div className="insight-body">
-        {BODY_SECTIONS.filter((s) => insight.buckets[s.key]?.length).map((s) => (
-          <div className={`insight-section${s.tone ? ` insight-section-${s.tone}` : ""}`} key={s.key}>
-            <div className="insight-section-title"><s.icon size={14} />{s.title}</div>
-            {insight.buckets[s.key].map((body, i) => <div key={i}>{renderMarkdown(body)}</div>)}
-          </div>
-        ))}
+        {BODY_SECTIONS.filter((s) => insight.buckets[s.key]?.length).map((s) => {
+          const isPriority = isLeakage && (s.key === "priority1" || s.key === "priority2");
+          return (
+            <div className={`insight-section${s.tone ? ` insight-section-${s.tone}` : ""}`} key={s.key}>
+              <div className="insight-section-title"><s.icon size={14} />{s.title}</div>
+              {isPriority && <LeakageChips rows={rows} metric={s.key === "priority1" ? "financial" : "operational"} />}
+              {insight.buckets[s.key].map((body, i) => isLeakage ? <CompactBullets key={i} text={body} max={3} highlight={categoryNames} /> : <div key={i}>{renderMarkdown(body)}</div>)}
+            </div>
+          );
+        })}
       </div>
-      {insight.buckets.watchlist?.length ? <div className="callout callout-watchlist">
+      {insight.buckets.watchlist?.length ? <div className="callout callout-watchlist callout-compact">
         <div className="callout-title"><Eye size={15} />Watchlist</div>
-        {insight.buckets.watchlist.map((body, i) => <div key={i}>{renderMarkdown(body)}</div>)}
+        {isLeakage && <WatchlistChips rows={rows} />}
+        {insight.buckets.watchlist.map((body, i) => isLeakage ? <CompactBullets key={i} text={body} max={2} highlight={categoryNames} /> : <div key={i}>{renderMarkdown(body)}</div>)}
       </div> : null}
       {insight.buckets.distinction?.length ? <div className="callout callout-info">
         <div className="callout-title"><Lightbulb size={15} />Key distinction</div>
-        {insight.buckets.distinction.map((body, i) => <div key={i}>{renderMarkdown(body)}</div>)}
+        {isLeakage && <DistinctionColumns rows={rows} />}
+        {insight.buckets.distinction.map((body, i) => isLeakage ? <CompactBullets key={i} text={body} max={2} highlight={categoryNames} /> : <div key={i}>{renderMarkdown(body)}</div>)}
       </div> : null}
       {insight.buckets.caveats?.length ? <div className="callout callout-caveat">
         <div className="callout-title"><TriangleAlert size={15} />Validation notes</div>
-        {insight.buckets.caveats.map((body, i) => <div key={i}>{renderMarkdown(body)}</div>)}
+        {insight.buckets.caveats.map((body, i) => isLeakage ? <CompactBullets key={i} text={body} max={2} highlight={categoryNames} /> : <div key={i}>{renderMarkdown(body)}</div>)}
       </div> : null}
       {insight.buckets.recommendations?.length ? <div className="callout callout-recommend">
-        <div className="callout-title"><ArrowRight size={15} />Recommendation</div>
-        {insight.buckets.recommendations.map((body, i) => <div key={i}>{renderMarkdown(body)}</div>)}
+        <div className="callout-title"><Target size={15} />Recommendation</div>
+        {insight.buckets.recommendations.map((body, i) => isLeakage ? <CompactBullets key={i} text={body} max={4} ordered highlight={categoryNames} /> : <div key={i}>{renderMarkdown(body)}</div>)}
       </div> : null}
       {response.source_health_warning && <div className="health-warning">{response.source_health_warning}</div>}
     </div>

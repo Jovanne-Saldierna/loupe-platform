@@ -287,7 +287,10 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .chat-message-group { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .chat-bubble { max-width: 100%; border-radius: 16px; padding: 11px 16px; font-size: 14px; line-height: 1.5; }
 .chat-bubble-user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
-.chat-bubble-assistant { display: flex; align-items: flex-start; gap: 8px; background: var(--muted); border-bottom-left-radius: 4px; font-weight: 600; }
+/* The assistant's first summary line -- kept as a distinct, readable summary
+   card rather than letting it run edge-to-edge: capped width + generous
+   line-height so it reads as one clean statement above the insight card. */
+.chat-bubble-assistant { display: flex; align-items: flex-start; gap: 8px; background: var(--muted); border-bottom-left-radius: 4px; font-weight: 600; max-width: 640px; line-height: 1.6; }
 .chat-bubble-assistant svg { color: var(--accent); flex: 0 0 auto; margin-top: 2px; }
 .chat-typing { display: flex; gap: 4px; padding: 3px 0; }
 .chat-typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--muted-foreground); animation: chatTyping 1.2s ease-in-out infinite; }
@@ -353,6 +356,52 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .callout-recommend { background: var(--accent-soft); color: var(--foreground); }
 .callout-recommend .callout-title { color: var(--accent); }
 .callout-recommend ul { padding-left: 18px; }
+/* Watchlist reads as a smaller, tighter card than the other callouts per
+   the returns-leakage insight-module spec. */
+.callout-compact { padding: 10px 14px; }
+.callout-compact .callout-title { font-size: 12px; margin-bottom: 4px; }
+
+/* --- returns_leakage insight modules --------------------------------------
+   Chart card, capped-bullet sections, category chips, and the two-column
+   distinction card that replace dense paragraph text with scannable
+   product modules for Priority 1/2, Watchlist, Key Distinction, and
+   Recommendation. */
+.evidence-card { background: var(--muted); border-radius: 12px; padding: 14px 14px 6px; margin-bottom: 4px; }
+.evidence-card-title { font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; color: var(--muted-foreground); margin-bottom: 8px; }
+
+.insight-bullets { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+/* Category names bolded via highlightCategories() (a display-only transform,
+   no wording changed) read as the anchor of each bullet -- e.g. "**Swim** --
+   reason / next step" -- instead of a flat sentence. */
+.insight-bullets strong { color: var(--accent); }
+.insight-bullets li { position: relative; padding-left: 16px; font-size: 14px; line-height: 1.5; }
+.insight-bullets li::before { content: "•"; position: absolute; left: 0; color: var(--accent); }
+ol.insight-bullets { counter-reset: rec; }
+ol.insight-bullets li { padding-left: 22px; }
+ol.insight-bullets li::before { content: counter(rec) "."; counter-increment: rec; font-weight: 650; color: var(--accent); }
+.insight-more { margin-top: 6px; }
+.insight-more summary { cursor: pointer; font-size: 12px; color: var(--muted-foreground); font-weight: 600; }
+.insight-more summary:hover { color: var(--accent); }
+.insight-more .insight-bullets { margin-top: 8px; }
+
+.leakage-chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.leakage-chip { flex: 1 1 140px; min-width: 130px; border-radius: 10px; padding: 9px 11px; background: var(--card); border: 1px solid var(--border); }
+.leakage-chip-cat { font-size: 12px; font-weight: 650; margin-bottom: 3px; }
+.leakage-chip-metric { font-size: 14px; font-weight: 700; }
+.leakage-chip-financial { border-left: 3px solid #c0362c; }
+.leakage-chip-financial .leakage-chip-metric { color: #c0362c; }
+.leakage-chip-operational { border-left: 3px solid var(--accent); }
+.leakage-chip-operational .leakage-chip-metric { color: var(--accent); }
+.leakage-chip-amber { border-left: 3px solid #b8721f; background: #fffaf2; flex: 1 1 160px; }
+.leakage-chip-amber .leakage-chip-metric { color: #a8551b; }
+
+.distinction-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px; }
+.distinction-col { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.distinction-col-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .02em; color: var(--muted-foreground); margin-bottom: 4px; }
+.distinction-col-financial .distinction-col-title svg { color: #c0362c; }
+.distinction-col-operational .distinction-col-title svg { color: var(--accent); }
+.distinction-col-value { font-size: 14px; font-weight: 650; }
+@media (max-width: 560px) { .distinction-columns { grid-template-columns: 1fr; } }
 
 /* --- Shell: real SaaS admin nav rail, not a floating card and not an
    overboxed frame -- scoped to .product-loupe only, so Governance/Triage
