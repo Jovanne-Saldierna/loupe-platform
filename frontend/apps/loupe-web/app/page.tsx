@@ -4,9 +4,9 @@ import type { ComponentType, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
-  ArrowRight, ChartNoAxesCombined, Database, Download, Home as HomeIcon, LayoutDashboard,
-  ListChecks, MapPin, Megaphone, MessageSquareText, ScanSearch, Shirt, SlidersHorizontal, Sparkles,
-  TriangleAlert, TrendingUp,
+  ArrowRight, ChartNoAxesCombined, Database, DollarSign, Download, Eye, Home as HomeIcon, LayoutDashboard,
+  Lightbulb, ListChecks, MapPin, Megaphone, MessageSquareText, PackageSearch, ScanSearch, Shirt, SlidersHorizontal,
+  Sparkles, TriangleAlert, TrendingUp,
 } from "lucide-react";
 import { AppShell, Badge, Card, Unavailable } from "@loupe/ui";
 
@@ -223,10 +223,17 @@ function splitByHeaders(text: string): ParsedBlock[] {
   return blocks.filter((b) => b.header || b.body.trim());
 }
 const SECTION_MATCHERS: { key: string; test: (h: string) => boolean }[] = [
-  { key: "takeaway", test: (h) => !/pro.?forma/i.test(h) && /takeaway|performance summary|^summary$|overview/i.test(h) },
+  { key: "takeaway", test: (h) => !/pro.?forma/i.test(h) && /takeaway|performance summary|^summary$|overview|where to focus|bottom line/i.test(h) },
   { key: "baseline", test: (h) => /baseline|current (state|performance)/i.test(h) },
   { key: "scenario", test: (h) => /scenario|hypothetical|what.?if/i.test(h) },
   { key: "proforma", test: (h) => /pro.?forma|projected|projection|retained (revenue|margin)/i.test(h) },
+  // Returns-leakage diagnostic headers (see apps/loupe_agent/chat.py's
+  // _LEAKAGE_SYSTEM): "Priority 1 -- Highest Financial Impact", "Priority 2
+  // -- High Return Volume", "Watchlist -- Rate Anomalies", "Key Distinction".
+  { key: "priority1", test: (h) => /priority\s*1|highest financial impact|financial impact/i.test(h) },
+  { key: "priority2", test: (h) => /priority\s*2|return volume|operational/i.test(h) },
+  { key: "watchlist", test: (h) => /watchlist|rate anomal/i.test(h) },
+  { key: "distinction", test: (h) => /key distinction/i.test(h) },
   { key: "highlights", test: (h) => /highlight|key (finding|metric)/i.test(h) },
   { key: "caveats", test: (h) => /caveat|assumption|limitation|validation/i.test(h) },
   { key: "recommendations", test: (h) => /recommend|next step|action/i.test(h) },
@@ -250,10 +257,12 @@ function buildInsight(answerText: string) {
   const headline = firstLine(buckets.takeaway?.[0] ?? leadIn) || firstLine(cleanMarkdown(answerText).replace(/^#{2,4}\s+.*/gm, "")) || "Grounded answer below.";
   return { headline, buckets };
 }
-const BODY_SECTIONS: { key: string; title: string; icon: ComponentType<{ size?: number }> }[] = [
+const BODY_SECTIONS: { key: string; title: string; icon: ComponentType<{ size?: number }>; tone?: "financial" | "operational" }[] = [
   { key: "baseline", title: "Baseline", icon: Database },
   { key: "scenario", title: "Scenario / Hypothetical", icon: Sparkles },
   { key: "proforma", title: "Pro Forma Summary", icon: TrendingUp },
+  { key: "priority1", title: "Priority 1 · Highest Financial Impact", icon: DollarSign, tone: "financial" },
+  { key: "priority2", title: "Priority 2 · High Return Volume", icon: PackageSearch, tone: "operational" },
   { key: "highlights", title: "Key Highlights", icon: ChartNoAxesCombined },
   { key: "details", title: "Additional Detail", icon: MessageSquareText },
 ];
@@ -427,12 +436,20 @@ function AskInsightBody({ response, insight }: { response: AskResponse; insight:
       <AskEvidence data={response.raw_data} />
       <div className="insight-body">
         {BODY_SECTIONS.filter((s) => insight.buckets[s.key]?.length).map((s) => (
-          <div className="insight-section" key={s.key}>
+          <div className={`insight-section${s.tone ? ` insight-section-${s.tone}` : ""}`} key={s.key}>
             <div className="insight-section-title"><s.icon size={14} />{s.title}</div>
             {insight.buckets[s.key].map((body, i) => <div key={i}>{renderMarkdown(body)}</div>)}
           </div>
         ))}
       </div>
+      {insight.buckets.watchlist?.length ? <div className="callout callout-watchlist">
+        <div className="callout-title"><Eye size={15} />Watchlist</div>
+        {insight.buckets.watchlist.map((body, i) => <div key={i}>{renderMarkdown(body)}</div>)}
+      </div> : null}
+      {insight.buckets.distinction?.length ? <div className="callout callout-info">
+        <div className="callout-title"><Lightbulb size={15} />Key distinction</div>
+        {insight.buckets.distinction.map((body, i) => <div key={i}>{renderMarkdown(body)}</div>)}
+      </div> : null}
       {insight.buckets.caveats?.length ? <div className="callout callout-caveat">
         <div className="callout-title"><TriangleAlert size={15} />Validation notes</div>
         {insight.buckets.caveats.map((body, i) => <div key={i}>{renderMarkdown(body)}</div>)}
