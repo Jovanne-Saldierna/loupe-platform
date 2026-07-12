@@ -14,7 +14,7 @@
    the review/result panel gets a comfortable but not squeezed sidebar. */
 .review-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(340px, .9fr); gap: 24px; }
 .code-input {
-  width: 100%; min-height: 340px; resize: vertical; border: 1px solid var(--border); outline: 0;
+  width: 100%; min-height: 280px; resize: vertical; border: 1px solid var(--border); outline: 0;
   border-radius: 16px; background: var(--muted); padding: 20px; color: #202126;
   font: 15px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -48,6 +48,12 @@
   --border: #3a3b40;
   --accent: #9b77f3;
   --accent-soft: #332c47;
+  /* .product's `color` was set once at :root using the light theme's
+     --foreground and is inherited as a fixed computed value from there --
+     redefining --foreground alone does not make descendants re-resolve it.
+     Re-declaring `color` here is what actually makes headings, stat
+     values, brand text, and health-row labels pick up the light color. */
+  color: var(--foreground);
 }
 .product-triage .button { background: #fff; color: #202126; }
 .product-triage .unavailable { background: #3b3730; border-color: #74664b; color: #fff; }
