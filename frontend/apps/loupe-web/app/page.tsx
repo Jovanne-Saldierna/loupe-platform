@@ -942,8 +942,12 @@ export default function Page() {
               </div>
             </section>
 
-            <section><div className="dash-primary-grid">
-              <SectionCard icon={TrendingUp} title="Revenue & margin trend" description="Revenue and margin are plotted together so the profitability trend is visible alongside top-line growth, not just revenue in isolation.">
+            {/* One CSS-grid-areas layout instead of three stacked sections, so
+                Category Leaderboard flows in directly under the trend chart
+                (same grid column) instead of waiting for the right-side
+                stack's height -- that mismatch was the dead-zone bug. */}
+            <section><div className="dash-content-grid">
+              <SectionCard className="dash-area-trend" icon={TrendingUp} title="Revenue & margin trend" description="Revenue and margin are plotted together so the profitability trend is visible alongside top-line growth, not just revenue in isolation.">
                 {data.trend.length > 0 && (() => { const latest = data.trend[data.trend.length - 1]; const marginRate = latest.revenue ? (latest.margin / latest.revenue) * 100 : null; return (
                   <div className="chart-highlight-row">
                     <span><strong>{money(latest.revenue)}</strong> revenue</span>
@@ -956,25 +960,21 @@ export default function Page() {
                 <div className="chart-footer-line muted small">Revenue is {delta(data.revenue.change_pct)} and margin rate is {delta(data.gross_margin_pct.change_pct, " pts")} vs. the prior period.</div>
               </SectionCard>
 
-              <div className="dash-side-stack">
-                <SectionCard icon={TrendingDown} title="Returns leakage snapshot" description="Top categories losing margin to returns.">
-                  {!leakageRows ? <div className="muted small">Loading leakage data&hellip;</div> : leakageRows.length === 0 ? <div className="muted small">No leakage data available.</div> : <ReturnsLeakageSnapshot rows={leakageRows} />}
-                </SectionCard>
-                <SectionCard icon={ShieldCheck} title="Data confidence" description="Live source status for this tab.">
-                  <div className="confidence-rows">
-                    <div className="confidence-row"><span className="muted small">Source</span><Badge tone={data.source_health.status === "healthy" ? "accent" : "warning"}>{data.source_health.status}</Badge></div>
-                    <div className="confidence-row"><span className="muted small">Certification</span><span>{data.metric_context.certification_status}</span></div>
-                    <div className="confidence-row"><span className="muted small">Reporting grain</span><span>{data.metric_context.reporting_grain}</span></div>
-                    <div className="confidence-row"><span className="muted small">Active filters</span><span>{activeFilterCount > 0 ? `${activeFilterCount} applied` : "None"}</span></div>
-                  </div>
-                  {data.source_health.warning && <div className="health-warning">{data.source_health.warning}</div>}
-                </SectionCard>
-                <QuickAsk subtitle="Get a grounded recommendation." disabled={asking} onAsk={askQuestion} prompts={["What categories need attention?", "Which categories are losing the most money to returns?", "How has paid vs organic channel mix changed?"]} />
-              </div>
-            </div></section>
+              <SectionCard className="dash-area-leakage" icon={TrendingDown} title="Returns leakage snapshot" description="Top categories losing margin to returns.">
+                {!leakageRows ? <div className="muted small">Loading leakage data&hellip;</div> : leakageRows.length === 0 ? <div className="muted small">No leakage data available.</div> : <ReturnsLeakageSnapshot rows={leakageRows} />}
+              </SectionCard>
+              <SectionCard className="dash-area-confidence" icon={ShieldCheck} title="Data confidence" description="Live source status for this tab.">
+                <div className="confidence-rows">
+                  <div className="confidence-row"><span className="muted small">Source</span><Badge tone={data.source_health.status === "healthy" ? "accent" : "warning"}>{data.source_health.status}</Badge></div>
+                  <div className="confidence-row"><span className="muted small">Certification</span><span>{data.metric_context.certification_status}</span></div>
+                  <div className="confidence-row"><span className="muted small">Reporting grain</span><span>{data.metric_context.reporting_grain}</span></div>
+                  <div className="confidence-row"><span className="muted small">Active filters</span><span>{activeFilterCount > 0 ? `${activeFilterCount} applied` : "None"}</span></div>
+                </div>
+                {data.source_health.warning && <div className="health-warning">{data.source_health.warning}</div>}
+              </SectionCard>
 
-            <section><div className="dash-two-col">
               <SectionCard
+                className="dash-area-leaderboard"
                 icon={Trophy}
                 title="Category leaderboard"
                 description={`Top 8 by ${sortMetric.replaceAll("_", " ")}, computed from the same order-item grain as the KPIs above.`}
@@ -986,6 +986,7 @@ export default function Page() {
                 {!sortedCategoryRows ? <div className="muted small">Loading category leaderboard&hellip;</div> : sortedCategoryRows.length === 0 ? <div className="muted small">No category data in this window.</div> : <CategoryLeaderboardRows rows={sortedCategoryRows.slice(0, 8)} sortMetric={sortMetric} />}
               </SectionCard>
               <SectionCard
+                className="dash-area-region"
                 icon={MapPin}
                 title="Revenue by region"
                 description="Top 15 regions by revenue, share of the total shown region-to-region."
@@ -1003,19 +1004,20 @@ export default function Page() {
                   ))}</div>;
                 })()}
               </SectionCard>
-            </div></section>
 
-            <section><SectionCard
-              icon={Megaphone}
-              title="Paid vs. organic channel mix"
-              description="Share of order items from paid channels (Facebook, Display, Email) vs. organic/direct (Search, Organic)."
-              action={channelMonths && channelMonths.length > 0 && <button className="button" onClick={() => downloadCsv("channel_mix.csv", channelMonths)}><Download size={14} />CSV</button>}
-            >
-              {!channelMonths ? <div className="muted small">Loading channel mix&hellip;</div> : <>
-                <ChannelChart months={channelMonths} compact />
-                <div className="chart-footer-line muted small">Denominator: {number(channelMonths[channelMonths.length - 1].total)} order items in the latest period.</div>
-              </>}
-            </SectionCard></section>
+              <SectionCard
+                className="dash-area-channel"
+                icon={Megaphone}
+                title="Paid vs. organic channel mix"
+                description="Share of order items from paid channels (Facebook, Display, Email) vs. organic/direct (Search, Organic)."
+                action={channelMonths && channelMonths.length > 0 && <button className="button" onClick={() => downloadCsv("channel_mix.csv", channelMonths)}><Download size={14} />CSV</button>}
+              >
+                {!channelMonths ? <div className="muted small">Loading channel mix&hellip;</div> : <>
+                  <ChannelChart months={channelMonths} compact />
+                  <div className="chart-footer-line muted small">Denominator: {number(channelMonths[channelMonths.length - 1].total)} order items in the latest period.</div>
+                </>}
+              </SectionCard>
+            </div></section>
           </div>}
 
           {activeView === "performance" && <>

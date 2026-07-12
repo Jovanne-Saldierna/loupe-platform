@@ -308,23 +308,42 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .dash-toolbar .reset-filters-btn { padding: 5px 11px; font-size: 12px; }
 .dash-toolbar .msd { min-width: 150px; }
 
-.dash-primary-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, .8fr); gap: 20px; align-items: start; }
-.dash-side-stack { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-/* Side-stack cards run narrower than the main column, so trim the base
+/* One CSS-grid-areas layout for everything below the toolbar, replacing the
+   old "primary grid" + "two-col" as separate stacked sections. That split
+   caused a dead zone: the right stack (Leakage + Confidence, previously also
+   Ask Loupe) could run taller than the compact trend chart, so the next
+   section -- Category Leaderboard -- couldn't start until the *tallest*
+   column finished, leaving a large blank gap under the shorter chart
+   column. Putting the leaderboard in the same grid, in the trend's own
+   column, makes it flow immediately under the chart regardless of how tall
+   the right column is. */
+.dash-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, .8fr);
+  grid-template-areas:
+    "trend       leakage"
+    "trend       confidence"
+    "leaderboard region"
+    "channel     channel";
+  gap: 20px;
+  align-items: start;
+}
+.dash-area-trend { grid-area: trend; }
+.dash-area-leakage { grid-area: leakage; }
+.dash-area-confidence { grid-area: confidence; }
+.dash-area-leaderboard { grid-area: leaderboard; }
+.dash-area-region { grid-area: region; }
+.dash-area-channel { grid-area: channel; }
+/* Leakage/Confidence run narrower than the main column, so trim the base
    32px card padding down to keep them reading as compact admin-panel
    modules instead of the same spacious card used for the big trend chart. */
-.dash-side-stack > .card { padding: 20px 22px; }
-
-/* Leaderboard (6 grid columns internally) and Revenue by Region both need
-   real width to stay legible -- a 360px floor keeps them from squeezing
-   into cramped columns before the breakpoint stacks them. */
-.dash-two-col { display: grid; grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr); gap: 20px; align-items: start; }
+.dash-area-leakage, .dash-area-confidence { padding: 20px 22px; }
 
 @media (max-width: 1280px) {
-  .dash-primary-grid { grid-template-columns: 1fr; }
-}
-@media (max-width: 1040px) {
-  .dash-two-col { grid-template-columns: 1fr; }
+  .dash-content-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas: "trend" "leakage" "confidence" "leaderboard" "region" "channel";
+  }
   .dash-toolbar { align-items: stretch; }
 }
 
@@ -591,7 +610,7 @@ select[multiple].select { min-height: 84px; padding: 6px; }
    the 24px default so cards read as a tight admin surface, not oversized
    marketing panels. */
 .dash-surface .card { padding: 22px; border-radius: 16px; box-shadow: 0 1px 2px rgba(16, 24, 40, .05); }
-.dash-surface .dash-side-stack > .card { padding: 18px 20px; }
+.dash-surface .dash-area-leakage, .dash-surface .dash-area-confidence { padding: 18px 20px; }
 
 /* Card headers: compact icon+title row, smaller title, tighter description. */
 .dash-surface .card-head { margin-bottom: 10px; gap: 10px; }
