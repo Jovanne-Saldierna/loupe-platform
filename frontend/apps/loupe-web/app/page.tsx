@@ -108,6 +108,12 @@ function useClickOutside(ref: React.RefObject<HTMLElement | null>, onOutside: ()
 // Compact checklist dropdown replacing the native <select multiple> box --
 // same filter state/behavior, presented as a single trigger + panel instead
 // of a giant always-open list.
+// "Category" -> "categories", "Region" -> "regions" (naive -y/-ies handling
+// is all two labels ever need here).
+function pluralizeLower(label: string) {
+  const lower = label.toLowerCase();
+  return lower.endsWith("y") ? `${lower.slice(0, -1)}ies` : `${lower}s`;
+}
 function MultiSelectDropdown({ label, options, selected, onChange }: { label: string; options: string[]; selected: string[]; onChange: (v: string[]) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -116,7 +122,7 @@ function MultiSelectDropdown({ label, options, selected, onChange }: { label: st
     <div className="msd" ref={ref}>
       <span className="filter-label">{label}</span>
       <button type="button" className="msd-trigger" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span>{selected.length ? `${selected.length} selected` : `All ${label.toLowerCase()}s`}</span>
+        <span>{selected.length ? `${selected.length} selected` : `All ${pluralizeLower(label)}`}</span>
         <span className="msd-caret">{open ? "▲" : "▼"}</span>
       </button>
       {open && <div className="msd-panel">
@@ -705,7 +711,7 @@ function CategoryLeaderboardRows({ rows, sortMetric }: { rows: CategoryRow[]; so
         <div className="leaderboard-row" key={r.category}>
           <span className="leaderboard-rank">{i + 1}</span>
           <span className="leaderboard-cat">
-            {r.category}
+            <span className="leaderboard-cat-name">{r.category}</span>
             <span className="leaderboard-bar-track"><span className="leaderboard-bar-fill" style={{ width: `${(Number(r[sortMetric]) / max) * 100}%` }} /></span>
           </span>
           <span className="leaderboard-cell">{money(r.revenue)}</span>
@@ -902,7 +908,7 @@ export default function Page() {
             <section><QuickAsk subtitle="Grounded answers about revenue, returns, and regions." disabled={asking} onAsk={askQuestion} prompts={["Which categories are losing the most money to returns?", "How is Swim performing?", "Compare California, Texas, and New York."]} /></section>
           </>}
 
-          {activeView === "dashboard" && <>
+          {activeView === "dashboard" && <div className="dash-surface">
             <section className="dash-header">
               <h2>Dashboard</h2>
               <div className="muted small">Revenue, margin, and returns performance across the current filter scope.</div>
@@ -913,8 +919,11 @@ export default function Page() {
               <Stat icon={Percent} label="Margin" value={money(data.revenue.value * (data.gross_margin_pct.value / 100))} change={delta(data.gross_margin_pct.change_pct, " pts")} note="vs. prior period" />
               <Card className="metric-tile">
                 <div className="stat-label"><span className="metric-tile-icon"><RotateCcw size={13} /></span>Return rate</div>
-                <div className="stat-line"><span className="stat-value">{data.return_rate_pct.value.toFixed(1)}%</span><span className="delta">{delta(data.return_rate_pct.change_pct, " pts")}</span></div>
-                <span className={`pill ${returnRatePill(data.return_rate_pct.value).cls}`}>{returnRatePill(data.return_rate_pct.value).label}</span>
+                <div className="stat-line">
+                  <span className="stat-value">{data.return_rate_pct.value.toFixed(1)}%</span>
+                  <span className="delta">{delta(data.return_rate_pct.change_pct, " pts")}</span>
+                  <span className={`pill ${returnRatePill(data.return_rate_pct.value).cls}`}>{returnRatePill(data.return_rate_pct.value).label}</span>
+                </div>
               </Card>
               <Stat icon={ShoppingBag} label="Items sold" value={number(data.order_items.value)} change={delta(data.order_items.change_pct)} note="vs. prior period" />
             </div></section>
@@ -1012,7 +1021,7 @@ export default function Page() {
                 <div className="chart-footer-line muted small">Denominator: {number(channelMonths[channelMonths.length - 1].total)} order items in the latest period.</div>
               </>}
             </SectionCard></section>
-          </>}
+          </div>}
 
           {activeView === "performance" && <>
             <section><SectionCard title="Performance readout" description="Change across the four governed metrics vs. the prior period.">

@@ -173,8 +173,8 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .pill-risk { background: #fdecec; color: #c0362c; }
 
 /* Revenue-by-state polished fallback (no map dependency available). */
-.state-bars { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
-.state-bar-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto 34px; align-items: center; gap: 10px; }
+.state-bars { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.state-bar-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto 34px; align-items: center; gap: 10px; }
 .state-bar-label { font-size: 12px; font-weight: 650; color: var(--muted-foreground); }
 .state-bar-track { height: 10px; border-radius: 999px; background: var(--muted); overflow: hidden; }
 .state-bar-fill { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
@@ -245,19 +245,23 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .chart-stats { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 /* One-line footer under a Dashboard chart card, tying the visual back to a
    concrete number instead of leaving the chart to speak for itself. */
-.chart-footer-line { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.chart-footer-line { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 13px; }
 
 /* Category leaderboard: dense table/list hybrid (rank, category + mini bar
-   for the active sort metric, revenue, margin, return rate, items). */
-.leaderboard-table { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+   for the active sort metric, revenue, margin, return rate, items). Rows are
+   flat table rows with a hairline separator -- NOT individual rounded/
+   bordered cards -- so density matches the Revenue by Region state rows. */
+.leaderboard-table { display: flex; flex-direction: column; gap: 0; margin-top: 2px; }
 .leaderboard-head, .leaderboard-row {
-  display: grid; grid-template-columns: 22px 1.7fr .9fr .9fr .8fr .7fr; align-items: center; gap: 10px;
+  display: grid; grid-template-columns: 20px 1.7fr .9fr .9fr .8fr .7fr; align-items: center; gap: 10px;
 }
-.leaderboard-head { font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .02em; color: var(--muted-foreground); padding: 0 10px 6px; }
-.leaderboard-row { padding: 8px 10px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); }
+.leaderboard-head { font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .02em; color: var(--muted-foreground); padding: 0 6px 6px; }
+.leaderboard-row { padding: 7px 6px; border-radius: 0; background: transparent; border: 0; border-bottom: 1px solid var(--border); }
+.leaderboard-row:last-child { border-bottom: 0; }
 .leaderboard-rank { font-size: 12px; font-weight: 700; color: var(--muted-foreground); }
-.leaderboard-cat { font-size: 13px; font-weight: 650; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.leaderboard-bar-track { height: 5px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.leaderboard-cat { font-size: 13px; font-weight: 650; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.leaderboard-cat-name { display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.leaderboard-bar-track { height: 3px; border-radius: 999px; background: var(--muted); overflow: hidden; }
 .leaderboard-bar-fill { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
 .leaderboard-cell { font-size: 13px; text-align: right; white-space: nowrap; }
 @media (max-width: 700px) {
@@ -268,11 +272,11 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 
 /* Dashboard-only Returns Leakage Snapshot lead line, above the reused
    .leakage-row-list cards. */
-.leakage-summary-line { font-size: 13px; line-height: 1.5; margin: 0 0 10px; }
+.leakage-summary-line { font-size: 13px; line-height: 1.45; margin: 0 0 8px; }
 
 /* Data confidence card: label/value rows instead of a paragraph. */
-.confidence-rows { display: flex; flex-direction: column; gap: 8px; }
-.confidence-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.confidence-rows { display: flex; flex-direction: column; gap: 6px; }
+.confidence-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
 .confidence-row:last-child { border-bottom: 0; padding-bottom: 0; }
 
 /* --- Dashboard layout density -----------------------------------------
@@ -285,11 +289,19 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .dash-header h2 { font-size: 20px; margin: 0 0 4px; }
 
 .dash-toolbar {
-  display: flex; align-items: flex-end; flex-wrap: wrap; gap: 16px;
-  padding: 10px 16px; background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  display: flex; align-items: flex-end; flex-wrap: wrap; gap: 14px;
+  padding: 8px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 12px;
 }
-.dash-toolbar-icon { color: var(--muted-foreground); margin-bottom: 9px; flex: 0 0 auto; }
+.dash-toolbar-icon { color: var(--muted-foreground); margin-bottom: 8px; flex: 0 0 auto; }
 .dash-toolbar-spacer { flex: 1 1 auto; min-width: 8px; }
+/* Toolbar controls share one height so date range / category / region /
+   reset all line up cleanly instead of drifting by a couple of px each. */
+.dash-toolbar .date-range-control,
+.dash-toolbar .msd-trigger { min-height: 34px; padding-top: 5px; padding-bottom: 5px; }
+.dash-toolbar .msd-trigger { padding: 6px 10px; font-size: 13px; }
+.dash-toolbar .date-input { font-size: 13px; padding: 4px 3px; }
+.dash-toolbar .reset-filters-btn { padding: 5px 11px; font-size: 12px; }
+.dash-toolbar .msd { min-width: 150px; }
 
 .dash-primary-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 20px; align-items: start; }
 .dash-side-stack { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
@@ -332,9 +344,9 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 /* Latest-period highlight row above the revenue/margin trend chart -- a
    clearer, bolder summary than the old below-chart caption, paired with a
    shorter chart frame so the card carries less empty space. */
-.chart-highlight-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 18px; margin: 2px 0 14px; font-size: 14px; }
-.chart-highlight-row strong { font-size: 16px; }
-.chart-frame-compact { height: 220px; }
+.chart-highlight-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 14px; margin: 0 0 10px; font-size: 13px; }
+.chart-highlight-row strong { font-size: 15px; }
+.chart-frame-compact { height: 200px; margin-top: 8px; }
 
 /* --- Ask Loupe chat panel (shadcn message-scroller reference) ------------ */
 
@@ -552,3 +564,55 @@ select[multiple].select { min-height: 84px; padding: 6px; }
   .msd-panel { width: 220px; }
   .insight-scope { text-align: left; }
 }
+
+/* --- Dashboard visual-density pass --------------------------------------
+   Everything below is scoped under .dash-surface (the wrapper around the
+   Dashboard tab's own JSX) so it can tighten classes that are also shared
+   with Home / Performance / Ask Loupe (.card, .card-head, .card h2,
+   .stat-*, .pill, .quick-ask*, .chat-chip, .leakage-row*,
+   .channel-snapshot*, .section-card .card-head) without changing how those
+   classes render anywhere else. Dashboard-exclusive classes (.leaderboard-*,
+   .dash-toolbar, .state-bar-*, .confidence-row, .chart-highlight-row, etc.)
+   were tightened directly above and don't need the prefix. */
+
+/* Card shell: less padding, one subtle shadow layer, a smaller radius than
+   the 24px default so cards read as a tight admin surface, not oversized
+   marketing panels. */
+.dash-surface .card { padding: 22px; border-radius: 16px; box-shadow: 0 1px 2px rgba(16, 24, 40, .05); }
+.dash-surface .dash-side-stack > .card { padding: 18px 20px; }
+
+/* Card headers: compact icon+title row, smaller title, tighter description. */
+.dash-surface .card-head { margin-bottom: 10px; gap: 10px; }
+.dash-surface .card h2 { font-size: 19px; margin: 0 0 2px; line-height: 1.25; }
+.dash-surface .card-head .muted.small { font-size: 12.5px; line-height: 1.4; max-width: 46ch; }
+.dash-surface .section-card .card-head { margin-bottom: 10px; }
+.dash-surface .card-head .actions .select { min-width: 0; padding: 6px 8px; font-size: 12.5px; }
+.dash-surface .card-head .actions .button { padding: 6px 9px; font-size: 12.5px; }
+
+/* KPI tiles: reduce padding, tighten value/delta/pill onto one dense row so
+   all four tiles carry the same visual weight, and pull the status pill
+   into that row instead of floating separately underneath. */
+.dash-surface .metric-tile { padding: 16px 18px; }
+.dash-surface .stat-label { font-size: 12.5px; }
+.dash-surface .stat-line { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.dash-surface .stat-value { font-size: 26px; }
+.dash-surface .metric-tile-note { margin-top: 4px; font-size: 12px; }
+.dash-surface .pill { margin-left: 0; }
+
+/* Right-side stack density: leakage rows, confidence rows, and the quick-ask
+   composer all get tighter padding + smaller type so the stack reads as one
+   dense column instead of three loosely-padded cards. */
+.dash-surface .leakage-row-list { gap: 5px; }
+.dash-surface .leakage-row { padding: 6px 10px; font-size: 12.5px; }
+.dash-surface .leakage-row-cat { font-size: 12.5px; }
+.dash-surface .leakage-row-metric b { font-size: 12.5px; }
+.dash-surface .quick-ask { padding: 16px 18px; }
+.dash-surface .quick-ask-head { margin-bottom: 8px; font-size: 13px; }
+.dash-surface .quick-ask-dock { padding: 8px 10px; border-radius: 12px; }
+.dash-surface .chat-chip { padding: 5px 11px; font-size: 12.5px; }
+
+/* Paid vs. organic channel snapshot: trim the empty space above the split
+   bar and tighten the legend line beneath it. */
+.dash-surface .channel-snapshot { margin-top: 2px; }
+.dash-surface .channel-snapshot-bar { height: 12px; }
+.dash-surface .channel-snapshot-legend { margin-top: 8px; font-size: 12.5px; }
