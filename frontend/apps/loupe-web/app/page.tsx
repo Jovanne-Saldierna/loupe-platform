@@ -6,7 +6,7 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContai
 import {
   ArrowRight, ChartNoAxesCombined, Database, DollarSign, Download, Eye, Home as HomeIcon, LayoutDashboard,
   Lightbulb, ListChecks, MapPin, Megaphone, MessageSquareText, PackageSearch, ScanSearch, Shirt, SlidersHorizontal,
-  Sparkles, TriangleAlert, TrendingUp,
+  Sparkles, TriangleAlert, TrendingDown, TrendingUp,
 } from "lucide-react";
 import { AppShell, Badge, Card, Unavailable } from "@loupe/ui";
 
@@ -51,15 +51,18 @@ const ALL_REGIONS = [
   "West Virginia", "Wisconsin", "Wyoming", "District of Columbia",
 ];
 
-// Exactly the 5 supported prompts -- these map to intents apps/loupe_agent/chat.py
+// The 6 supported prompts -- these map to intents apps/loupe_agent/chat.py
 // actually routes (single_category, multi_state_comparison, scenario_simulation,
-// returns_leakage, channel_analysis). No unsupported/vague prompts.
+// returns_leakage, channel_analysis). "What categories need attention?" now
+// routes to returns_leakage too (see chat.py's _ROUTER_SYSTEM). No
+// unsupported/vague prompts that still fail routing.
 const samplePrompts = [
   "Which categories are losing the most money to returns?",
   "How is Swim performing?",
   "Compare California, Texas, and New York.",
   "How has paid vs organic channel mix changed?",
   "What if we cut the return rate in Swim by 5 points?",
+  "What categories need attention?",
 ];
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 }).format(n);
@@ -479,8 +482,29 @@ function SectionCard({ icon: Icon, title, description, action, className = "", c
   );
 }
 
-function Stat({ label, value, change }: { label: string; value: string; change: string }) {
-  return <Card><div className="stat-label">{label}</div><div className="stat-line"><span className="stat-value">{value}</span><span className="delta">{change}</span></div></Card>;
+// KPI tile: label + value + a colored delta badge (up/down icon, not just
+// text) + an optional small contextual note -- the shadcnspace metric-tile
+// composition, reused across Home/Dashboard/Performance instead of each
+// tab inventing its own KPI markup.
+function Stat({ label, value, change, note }: { label: string; value: string; change: string; note?: string }) {
+  const unavailable = change === "Prior period unavailable";
+  const positive = !unavailable && change.startsWith("+");
+  const negative = !unavailable && change.startsWith("-");
+  const tone = unavailable ? "neutral" : positive ? "up" : negative ? "down" : "neutral";
+  return (
+    <Card className="metric-tile">
+      <div className="stat-label">{label}</div>
+      <div className="stat-line">
+        <span className="stat-value">{value}</span>
+        <span className={`metric-delta metric-delta-${tone}`}>
+          {positive && <TrendingUp size={12} />}
+          {negative && <TrendingDown size={12} />}
+          {change}
+        </span>
+      </div>
+      {note && <div className="metric-tile-note muted small">{note}</div>}
+    </Card>
+  );
 }
 
 export default function Page() {
@@ -587,10 +611,10 @@ export default function Page() {
 
           {activeView === "home" && <>
             <section><div className="metric-grid">
-              <Stat label="Net revenue" value={money(data.revenue.value)} change={delta(data.revenue.change_pct)} />
-              <Stat label="Gross margin" value={`${data.gross_margin_pct.value.toFixed(1)}%`} change={delta(data.gross_margin_pct.change_pct, " pts")} />
-              <Stat label="Order items" value={number(data.order_items.value)} change={delta(data.order_items.change_pct)} />
-              <Stat label="Return rate" value={`${data.return_rate_pct.value.toFixed(1)}%`} change={delta(data.return_rate_pct.change_pct, " pts")} />
+              <Stat label="Net revenue" value={money(data.revenue.value)} change={delta(data.revenue.change_pct)} note="vs. prior period" />
+              <Stat label="Gross margin" value={`${data.gross_margin_pct.value.toFixed(1)}%`} change={delta(data.gross_margin_pct.change_pct, " pts")} note="vs. prior period" />
+              <Stat label="Order items" value={number(data.order_items.value)} change={delta(data.order_items.change_pct)} note="vs. prior period" />
+              <Stat label="Return rate" value={`${data.return_rate_pct.value.toFixed(1)}%`} change={delta(data.return_rate_pct.change_pct, " pts")} note={returnRatePill(data.return_rate_pct.value).label} />
             </div></section>
             <section><div className="insight-grid">
               <Card>
@@ -635,14 +659,14 @@ export default function Page() {
             </section>
 
             <section><div className="section-title">Overview</div><div className="metric-grid">
-              <Stat label="Revenue" value={money(data.revenue.value)} change={delta(data.revenue.change_pct)} />
-              <Stat label="Margin" value={money(data.revenue.value * (data.gross_margin_pct.value / 100))} change={delta(data.gross_margin_pct.change_pct, " pts")} />
-              <Card>
+              <Stat label="Revenue" value={money(data.revenue.value)} change={delta(data.revenue.change_pct)} note="vs. prior period" />
+              <Stat label="Margin" value={money(data.revenue.value * (data.gross_margin_pct.value / 100))} change={delta(data.gross_margin_pct.change_pct, " pts")} note="vs. prior period" />
+              <Card className="metric-tile">
                 <div className="stat-label">Return rate</div>
                 <div className="stat-line"><span className="stat-value">{data.return_rate_pct.value.toFixed(1)}%</span><span className="delta">{delta(data.return_rate_pct.change_pct, " pts")}</span></div>
                 <span className={`pill ${returnRatePill(data.return_rate_pct.value).cls}`}>{returnRatePill(data.return_rate_pct.value).label}</span>
               </Card>
-              <Stat label="Items sold" value={number(data.order_items.value)} change={delta(data.order_items.change_pct)} />
+              <Stat label="Items sold" value={number(data.order_items.value)} change={delta(data.order_items.change_pct)} note="vs. prior period" />
             </div></section>
 
             <section><SectionCard title="Revenue & margin trend" description="Revenue and margin are plotted together so the profitability trend is visible alongside top-line growth, not just revenue in isolation.">
@@ -694,10 +718,10 @@ export default function Page() {
           {activeView === "performance" && <>
             <section><SectionCard title="Performance readout" description="Change across the four governed metrics vs. the prior period.">
               <div className="metric-grid">
-                <div><div className="stat-label">Revenue</div><div className="stat-value-sm">{delta(data.revenue.change_pct)}</div></div>
-                <div><div className="stat-label">Gross margin</div><div className="stat-value-sm">{delta(data.gross_margin_pct.change_pct, " pts")}</div></div>
-                <div><div className="stat-label">Order items</div><div className="stat-value-sm">{delta(data.order_items.change_pct)}</div></div>
-                <div><div className="stat-label">Return rate</div><div className="stat-value-sm">{delta(data.return_rate_pct.change_pct, " pts")}</div></div>
+                <Stat label="Revenue" value={money(data.revenue.value)} change={delta(data.revenue.change_pct)} note="vs. prior period" />
+                <Stat label="Gross margin" value={`${data.gross_margin_pct.value.toFixed(1)}%`} change={delta(data.gross_margin_pct.change_pct, " pts")} note="vs. prior period" />
+                <Stat label="Order items" value={number(data.order_items.value)} change={delta(data.order_items.change_pct)} note="vs. prior period" />
+                <Stat label="Return rate" value={`${data.return_rate_pct.value.toFixed(1)}%`} change={delta(data.return_rate_pct.change_pct, " pts")} note={returnRatePill(data.return_rate_pct.value).label} />
               </div>
             </SectionCard></section>
 
