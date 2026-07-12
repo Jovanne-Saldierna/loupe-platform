@@ -103,8 +103,8 @@ button, input, textarea, select { font: inherit; }
 }
 .stat-label { font-size: 14px; color: var(--muted-foreground); }
 .stat-line { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; margin-top: 10px; min-width: 0; }
-.stat-value { font-size: 40px; font-weight: 650; line-height: 1.1; max-width: 100%; overflow-wrap: anywhere; }
-.stat-value-sm { font-size: 22px; font-weight: 650; color: var(--accent); margin-top: 4px; }
+.stat-value { font-size: 34px; font-weight: 650; line-height: 1.1; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-value-sm { font-size: 22px; font-weight: 650; color: var(--accent); margin-top: 4px; white-space: nowrap; }
 .delta { color: var(--accent); font-size: 13px; }
 
 .main-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, .75fr); gap: 24px; }
@@ -146,3 +146,38 @@ button, input, textarea, select { font: inherit; }
   .card { padding: 20px; }
   .hero-panel { padding: 20px; }
 }
+
+/* Dashboard filters bar (Loupe restoration): date range + multi-select
+   category/state filters, laid out in a single responsive row. */
+.filters-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
+.filter-field { display: flex; flex-direction: column; gap: 5px; }
+.filter-field .select { min-width: 160px; }
+select[multiple].select { min-height: 84px; padding: 6px; }
+
+/* Return-rate status pill, ported from the original Streamlit app's
+   Healthy/Watch/Risk thresholds (>20% risk, >=10% watch, else healthy). */
+.pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 650; margin-left: 6px; }
+.pill-healthy { background: #e7f7ee; color: #1b7a43; }
+.pill-watch { background: #fff4e0; color: #b7791f; }
+.pill-risk { background: #fdecec; color: #c0362c; }
+
+/* Revenue-by-state polished fallback (no map dependency available). */
+.state-bars { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.state-bar-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.state-bar-label { font-size: 12px; font-weight: 650; color: var(--muted-foreground); }
+.state-bar-track { height: 10px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.state-bar-fill { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+.state-bar-value { white-space: nowrap; }
+
+/* Returns-leakage mini list (Performance tab data-confidence card). */
+.leakage-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.leakage-list li { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.leakage-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+
+/* Ask Loupe evidence + markdown-rendered answer block. */
+.answer-block { margin-top: 6px; }
+.evidence-kv > div { padding: 3px 0; }
+.answer h3, .answer h4 { margin: 10px 0 4px; }
+.answer ul { margin: 6px 0; padding-left: 20px; }
+.answer p { margin: 6px 0; }
+.answer .data-table { margin: 8px 0; }

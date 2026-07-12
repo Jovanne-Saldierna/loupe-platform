@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -61,6 +61,72 @@ class LoupeAskResponse(BaseModel):
     answer: str
     source_health_status: Optional[str]
     source_health_warning: Optional[str]
+    raw_data: Optional[Any] = Field(
+        default=None,
+        description="Structured evidence behind `answer`, when the matched intent produced any "
+        "(category/state metrics, comparison rows, channel-mix months, scenario baseline, "
+        "returns-leakage rows). Never fabricated -- passed through unchanged from "
+        "apps.loupe_agent.chat.run_agent()'s own raw_data.",
+    )
+
+
+class CategoryBreakdown(BaseModel):
+    category: str
+    revenue: float
+    margin: float
+    items: int
+    return_rate_pct: float
+
+
+class LoupeCategoriesResponse(BaseModel):
+    start_date: date
+    end_date: date
+    categories: list[CategoryBreakdown]
+
+
+class StateBreakdown(BaseModel):
+    state: str
+    state_abbrev: str
+    revenue: float
+    margin: float
+    items: int
+
+
+class LoupeStatesResponse(BaseModel):
+    start_date: date
+    end_date: date
+    states: list[StateBreakdown]
+
+
+class ChannelMonth(BaseModel):
+    month: str
+    paid: int
+    unpaid: int
+    total: int
+    paid_share_pct: float
+
+
+class LoupeChannelMixResponse(BaseModel):
+    start_date: date
+    end_date: date
+    months: list[ChannelMonth]
+
+
+class ReturnsLeakageRow(BaseModel):
+    category: str
+    returned_items: int
+    total_items: int
+    return_rate_pct: float
+    margin_lost_to_returns: float
+
+
+class LoupeReturnsLeakageResponse(BaseModel):
+    categories: list[ReturnsLeakageRow]
+
+
+class LoupeBenchmarkResponse(BaseModel):
+    avg_margin_pct: float
+    avg_return_rate_pct: float
 
 
 class ErrorResponse(BaseModel):

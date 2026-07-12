@@ -47,14 +47,29 @@ def _insight(current: dict, previous: dict) -> str:
     return f"Revenue {direction} {abs(revenue_change):.1f}% versus the prior period while return pressure {return_direction}."
 
 
-def build_loupe_overview(client: Any, start_date: date, end_date: date) -> LoupeOverviewResponse:
+def build_loupe_overview(
+    client: Any,
+    start_date: date,
+    end_date: date,
+    categories: list[str] | None = None,
+    states: list[str] | None = None,
+) -> LoupeOverviewResponse:
+    """Build the overview response, optionally scoped to `categories`/`states`.
+
+    Both filters are passed straight through to the already-existing
+    apps.loupe_agent.metrics.get_dashboard_kpis/get_revenue_trend
+    signatures (which already accept them) -- no new query logic. When
+    both are None (the default), behavior is byte-identical to before
+    this restoration pass, so existing callers/tests are unaffected.
+    """
+
     period_days = (end_date - start_date).days + 1
     previous_end = start_date - timedelta(days=1)
     previous_start = previous_end - timedelta(days=period_days - 1)
 
-    current = get_dashboard_kpis(client, start_date, end_date)
-    previous = get_dashboard_kpis(client, previous_start, previous_end)
-    trend_rows = get_revenue_trend(client, start_date, end_date)
+    current = get_dashboard_kpis(client, start_date, end_date, categories, states)
+    previous = get_dashboard_kpis(client, previous_start, previous_end, categories, states)
+    trend_rows = get_revenue_trend(client, start_date, end_date, categories, states)
     health = health_for(client, "dashboard_kpis")
     definition = _definition(client)
 
