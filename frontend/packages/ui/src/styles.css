@@ -181,3 +181,89 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .answer ul { margin: 6px 0; padding-left: 20px; }
 .answer p { margin: 6px 0; }
 .answer .data-table { margin: 8px 0; }
+
+/* --- Loupe UI polish pass ------------------------------------------------ */
+
+.button.ghost { background: transparent; border-color: transparent; }
+.button:disabled { opacity: .55; cursor: not-allowed; }
+
+.filter-label { display: block; font-size: 12px; font-weight: 650; color: var(--muted-foreground); margin-bottom: 6px; }
+
+/* Filter bar: date-range control + compact multi-select dropdowns, replacing
+   raw browser date/multi-select inputs. */
+.filters-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px; }
+.filter-field { display: flex; flex-direction: column; }
+.date-range-control { display: flex; align-items: center; gap: 8px; }
+.date-input { border: 1px solid var(--border); background: #fff; border-radius: 10px; padding: 8px 10px; color: var(--foreground); font-size: 14px; }
+.date-range-sep { color: var(--muted-foreground); }
+
+.msd { position: relative; display: flex; flex-direction: column; min-width: 170px; }
+.msd-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  border: 1px solid var(--border); background: #fff; border-radius: 10px; padding: 8px 12px;
+  font-size: 14px; color: var(--foreground); cursor: pointer;
+}
+.msd-trigger:hover { border-color: var(--accent); }
+.msd-caret { font-size: 9px; color: var(--muted-foreground); }
+.msd-panel {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; width: 260px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, .12); padding: 8px;
+}
+.msd-panel-actions { display: flex; justify-content: space-between; padding: 4px 6px 8px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+.msd-link { border: 0; background: transparent; color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; padding: 2px 4px; }
+.msd-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.msd-item { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 6px 6px; border-radius: 8px; cursor: pointer; }
+.msd-item:hover { background: var(--muted); }
+.msd-item input { margin: 0; }
+
+.filters-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+
+/* Chart framing copy + summary stat rows. */
+.chart-caption { margin: 0 0 10px; }
+.chart-stats { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+
+/* Single-month channel snapshot (no fake trend line for one data point). */
+.channel-snapshot { margin-top: 4px; }
+.channel-snapshot-bar { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--muted); }
+.channel-seg-paid { display: block; height: 100%; background: var(--accent); }
+.channel-seg-organic { display: block; height: 100%; background: #c7d2fe; }
+.channel-snapshot-legend { display: flex; gap: 18px; margin-top: 10px; font-size: 13px; }
+.channel-snapshot-legend span { display: flex; align-items: center; gap: 6px; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.dot-paid { background: var(--accent); }
+.dot-organic { background: #c7d2fe; }
+
+/* Quick-ask entry point card, reused on Home/Dashboard/Performance. */
+.quick-ask { border-left: 3px solid var(--accent); }
+
+/* Ask Loupe insight-brief layout. */
+.insight-brief { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.insight-brief-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.insight-scope { text-align: right; }
+.insight-headline { display: flex; align-items: flex-start; gap: 10px; font-size: 18px; font-weight: 650; line-height: 1.4; margin-bottom: 16px; }
+.insight-headline svg { color: var(--accent); flex: 0 0 auto; margin-top: 2px; }
+.insight-body { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+.insight-section { padding-top: 14px; border-top: 1px solid var(--border); }
+.insight-section:first-child { padding-top: 0; border-top: 0; }
+.insight-section-title { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; color: var(--muted-foreground); margin-bottom: 8px; }
+.insight-section-title svg { color: var(--accent); }
+.insight-body p, .insight-body ul { margin: 4px 0; }
+.insight-body h4 { font-size: 14px; margin: 0 0 4px; }
+.insight-body .data-table th, .insight-body .data-table td { padding: 7px 9px; font-size: 13px; }
+
+/* Caveats / recommendations get their own visually distinct callouts
+   instead of being buried in paragraph text. */
+.callout { margin-top: 16px; padding: 14px 16px; border-radius: 14px; }
+.callout-title { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 650; margin-bottom: 6px; }
+.callout p, .callout ul { margin: 4px 0; font-size: 14px; }
+.callout-caveat { background: #fff8e8; color: #6f5a1f; }
+.callout-caveat .callout-title { color: #8a6d1f; }
+.callout-recommend { background: var(--accent-soft); color: var(--foreground); }
+.callout-recommend .callout-title { color: var(--accent); }
+.callout-recommend ul { padding-left: 18px; }
+
+@media (max-width: 640px) {
+  .msd-panel { width: 220px; }
+  .insight-scope { text-align: left; }
+}
