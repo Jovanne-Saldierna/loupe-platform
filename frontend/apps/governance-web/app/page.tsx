@@ -1,0 +1,4 @@
+import { GitCompare, LayoutDashboard, Library, ScanText, ScrollText, ShieldCheck, Waypoints } from "lucide-react";
+import { AppShell, Unavailable } from "@loupe/ui";
+const nav=[{label:"Overview",icon:LayoutDashboard},{label:"Catalog",icon:Library},{label:"SQL Review",icon:ScanText,active:true},{label:"Definition Diff",icon:GitCompare},{label:"Lineage",icon:Waypoints},{label:"Audit",icon:ScrollText}];
+export default function Page(){return <AppShell active="governance" brand="Governance" brandIcon={ShieldCheck} navigation={nav}><header className="page-header"><div><div className="eyebrow">DEFINITION LAYER</div><h1>SQL governance review</h1><div className="muted">Validate analytical logic against governed definitions</div></div></header><Unavailable message="The Governance API screen is the next vertical slice. No sample review was substituted."/></AppShell>}

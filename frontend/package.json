@@ -1,0 +1,22 @@
+{
+  "name": "loupe-frontends",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:loupe": "npm run dev -w @loupe/loupe-web",
+    "dev:governance": "npm run dev -w @loupe/governance-web",
+    "dev:triage": "npm run dev -w @loupe/triage-web",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.10"
+    }
+  },
+  "devDependencies": {
+    "postcss": "^8.5.10"
+  }
+}

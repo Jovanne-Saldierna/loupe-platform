@@ -1,0 +1,8 @@
+{
+  "name": "@loupe/ui",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.tsx",
+  "types": "./src/index.tsx",
+  "dependencies": {"lucide-react": "^0.468.0", "react": "^19.0.0"}
+}

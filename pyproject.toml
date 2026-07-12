@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "loupe-platform"
+version = "0.1.0"
+description = "Loupe AI Analytics Platform Family monorepo (Assistant, Definition, and Reliability layers)."
+requires-python = ">=3.10"
+dependencies = [
+    # shared/ -- the one BigQuery gateway (all three apps)
+    "google-cloud-bigquery>=3.42,<4.0",
+    "sqlglot>=27.0,<31.0",
+    # apps/*/ui.py, apps/*/main.py -- Streamlit delivery (all three apps)
+    "streamlit>=1.59,<2.0",
+    "pandas>=2.0,<3.0",
+    # apps/loupe_agent/ -- dashboard charts and agent-response markdown
+    "plotly>=6.0,<7.0",
+    "markdown>=3.0,<4.0",
+    # apps/*/chat.py, apps/*/explanations.py -- narration-only LLM calls
+    "anthropic>=0.116,<1.0",
+    "langchain-anthropic>=1.0,<2.0",
+    "langchain-core>=1.0,<2.0",
+    # api/ -- typed delivery boundary for the three Next.js applications
+    "fastapi>=0.115,<1.0",
+    "uvicorn[standard]>=0.34,<1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+]
+
+[tool.setuptools.packages.find]
+# Explicit discovery (Phase 6B correction): without this table, a
+# flat-layout repo with multiple top-level packages (apps/, shared/,
+# tools/) has no documented, reliable auto-discovery behavior from
+# `pip install -e .` -- setuptools' implicit flat-layout heuristic is
+# designed for a single top-level package and does not commit to a
+# defined outcome here. This makes discovery explicit: include exactly
+# the three packages this project ships (and their subpackages), and
+# exclude tests/ (test code is never an installable package of this
+# project). See tests/test_packaging.py for the credential-free,
+# install-free check that this stays correct.
+include = ["api*", "apps*", "shared*", "tools*"]
+exclude = ["tests*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
