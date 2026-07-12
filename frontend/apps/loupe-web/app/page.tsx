@@ -903,28 +903,12 @@ export default function Page() {
           </>}
 
           {activeView === "dashboard" && <>
-            <section>
-              <SectionCard icon={SlidersHorizontal} title="Filters" description="Scope every chart and KPI on this tab to a date range, category, or region.">
-                <div className="filters-row">
-                  <div className="filter-field">
-                    <span className="filter-label">Date range</span>
-                    <div className="date-range-control">
-                      <input type="date" className="date-input" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} aria-label="Start date" />
-                      <span className="date-range-sep">&ndash;</span>
-                      <input type="date" className="date-input" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} aria-label="End date" />
-                    </div>
-                  </div>
-                  <MultiSelectDropdown label="Category" options={ALL_CATEGORIES} selected={selectedCategories} onChange={setSelectedCategories} />
-                  <MultiSelectDropdown label="Region" options={ALL_REGIONS} selected={selectedStates} onChange={setSelectedStates} />
-                </div>
-                <div className="filters-summary">
-                  <span className="filters-summary-text muted small">{formatDateShort(startDate)} &ndash; {formatDateShort(endDate)} &middot; {selectedCategories.length ? `${selectedCategories.length} categories` : "All categories"} &middot; {selectedStates.length ? `${selectedStates.length} regions` : "All regions"}</span>
-                  {activeFilterCount > 0 && <button type="button" className="button reset-filters-btn" onClick={() => { setSelectedCategories([]); setSelectedStates([]) }}><RotateCcw size={13} />Reset filters</button>}
-                </div>
-              </SectionCard>
+            <section className="dash-header">
+              <h2>Dashboard</h2>
+              <div className="muted small">Revenue, margin, and returns performance across the current filter scope.</div>
             </section>
 
-            <section><div className="section-title">Overview</div><div className="metric-grid">
+            <section><div className="metric-grid">
               <Stat icon={DollarSign} label="Revenue" value={money(data.revenue.value)} change={delta(data.revenue.change_pct)} note="vs. prior period" />
               <Stat icon={Percent} label="Margin" value={money(data.revenue.value * (data.gross_margin_pct.value / 100))} change={delta(data.gross_margin_pct.change_pct, " pts")} note="vs. prior period" />
               <Card className="metric-tile">
@@ -935,20 +919,57 @@ export default function Page() {
               <Stat icon={ShoppingBag} label="Items sold" value={number(data.order_items.value)} change={delta(data.order_items.change_pct)} note="vs. prior period" />
             </div></section>
 
-            <section><SectionCard icon={TrendingUp} title="Revenue & margin trend" description="Revenue and margin are plotted together so the profitability trend is visible alongside top-line growth, not just revenue in isolation.">
-              {data.trend.length > 0 && (() => { const latest = data.trend[data.trend.length - 1]; const marginRate = latest.revenue ? (latest.margin / latest.revenue) * 100 : null; return (
-                <div className="chart-highlight-row">
-                  <span><strong>{money(latest.revenue)}</strong> revenue</span>
-                  <span><strong>{money(latest.margin)}</strong> margin</span>
-                  {marginRate !== null && <span><strong>{marginRate.toFixed(1)}%</strong> margin rate</span>}
-                  <span className="muted small">latest period ({formatPeriod(latest.period)})</span>
+            <section>
+              <div className="dash-toolbar">
+                <SlidersHorizontal size={15} className="dash-toolbar-icon" />
+                <div className="filter-field">
+                  <span className="filter-label">Date range</span>
+                  <div className="date-range-control">
+                    <input type="date" className="date-input" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} aria-label="Start date" />
+                    <span className="date-range-sep">&ndash;</span>
+                    <input type="date" className="date-input" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} aria-label="End date" />
+                  </div>
                 </div>
-              ) })()}
-              <div className="chart-frame chart-frame-compact"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data.trend}><defs><linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2995ff" stopOpacity={.25} /><stop offset="1" stopColor="#2995ff" stopOpacity={0} /></linearGradient><linearGradient id="marginFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8b5cf6" stopOpacity={.2} /><stop offset="1" stopColor="#8b5cf6" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="#e5e5e7" vertical={false} /><XAxis dataKey="period" tickFormatter={formatPeriod} tickLine={false} axisLine={false} tick={{ fill: "#85868b", fontSize: 12 }} /><YAxis hide /><Tooltip formatter={(v, n) => [money(Number(v)), n]} labelFormatter={(l) => formatPeriod(String(l))} /><Legend verticalAlign="top" height={24} wrapperStyle={{ fontSize: 12 }} /><Area type="monotone" name="Revenue" dataKey="revenue" stroke="#2995ff" strokeWidth={3} fill="url(#revenueFill)" /><Area type="monotone" name="Margin" dataKey="margin" stroke="#8b5cf6" strokeWidth={3} fill="url(#marginFill)" /></AreaChart></ResponsiveContainer></div>
-              <div className="chart-footer-line muted small">Revenue is {delta(data.revenue.change_pct)} and margin rate is {delta(data.gross_margin_pct.change_pct, " pts")} vs. the prior period.</div>
-            </SectionCard></section>
+                <MultiSelectDropdown label="Category" options={ALL_CATEGORIES} selected={selectedCategories} onChange={setSelectedCategories} />
+                <MultiSelectDropdown label="Region" options={ALL_REGIONS} selected={selectedStates} onChange={setSelectedStates} />
+                <div className="dash-toolbar-spacer" />
+                {activeFilterCount > 0 && <Badge tone="accent">{activeFilterCount} filters active</Badge>}
+                {activeFilterCount > 0 && <button type="button" className="button reset-filters-btn" onClick={() => { setSelectedCategories([]); setSelectedStates([]) }}><RotateCcw size={13} />Reset</button>}
+              </div>
+            </section>
 
-            <section><div className="insight-grid">
+            <section><div className="dash-primary-grid">
+              <SectionCard icon={TrendingUp} title="Revenue & margin trend" description="Revenue and margin are plotted together so the profitability trend is visible alongside top-line growth, not just revenue in isolation.">
+                {data.trend.length > 0 && (() => { const latest = data.trend[data.trend.length - 1]; const marginRate = latest.revenue ? (latest.margin / latest.revenue) * 100 : null; return (
+                  <div className="chart-highlight-row">
+                    <span><strong>{money(latest.revenue)}</strong> revenue</span>
+                    <span><strong>{money(latest.margin)}</strong> margin</span>
+                    {marginRate !== null && <span><strong>{marginRate.toFixed(1)}%</strong> margin rate</span>}
+                    <span className="muted small">latest period ({formatPeriod(latest.period)})</span>
+                  </div>
+                ) })()}
+                <div className="chart-frame chart-frame-compact"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data.trend}><defs><linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2995ff" stopOpacity={.25} /><stop offset="1" stopColor="#2995ff" stopOpacity={0} /></linearGradient><linearGradient id="marginFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8b5cf6" stopOpacity={.2} /><stop offset="1" stopColor="#8b5cf6" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="#e5e5e7" vertical={false} /><XAxis dataKey="period" tickFormatter={formatPeriod} tickLine={false} axisLine={false} tick={{ fill: "#85868b", fontSize: 12 }} /><YAxis hide /><Tooltip formatter={(v, n) => [money(Number(v)), n]} labelFormatter={(l) => formatPeriod(String(l))} /><Legend verticalAlign="top" height={24} wrapperStyle={{ fontSize: 12 }} /><Area type="monotone" name="Revenue" dataKey="revenue" stroke="#2995ff" strokeWidth={3} fill="url(#revenueFill)" /><Area type="monotone" name="Margin" dataKey="margin" stroke="#8b5cf6" strokeWidth={3} fill="url(#marginFill)" /></AreaChart></ResponsiveContainer></div>
+                <div className="chart-footer-line muted small">Revenue is {delta(data.revenue.change_pct)} and margin rate is {delta(data.gross_margin_pct.change_pct, " pts")} vs. the prior period.</div>
+              </SectionCard>
+
+              <div className="dash-side-stack">
+                <SectionCard icon={TrendingDown} title="Returns leakage snapshot" description="Top categories losing margin to returns.">
+                  {!leakageRows ? <div className="muted small">Loading leakage data&hellip;</div> : leakageRows.length === 0 ? <div className="muted small">No leakage data available.</div> : <ReturnsLeakageSnapshot rows={leakageRows} />}
+                </SectionCard>
+                <SectionCard icon={ShieldCheck} title="Data confidence" description="Live source status for this tab.">
+                  <div className="confidence-rows">
+                    <div className="confidence-row"><span className="muted small">Source</span><Badge tone={data.source_health.status === "healthy" ? "accent" : "warning"}>{data.source_health.status}</Badge></div>
+                    <div className="confidence-row"><span className="muted small">Certification</span><span>{data.metric_context.certification_status}</span></div>
+                    <div className="confidence-row"><span className="muted small">Reporting grain</span><span>{data.metric_context.reporting_grain}</span></div>
+                    <div className="confidence-row"><span className="muted small">Active filters</span><span>{activeFilterCount > 0 ? `${activeFilterCount} applied` : "None"}</span></div>
+                  </div>
+                  {data.source_health.warning && <div className="health-warning">{data.source_health.warning}</div>}
+                </SectionCard>
+                <QuickAsk subtitle="Get a grounded recommendation." disabled={asking} onAsk={askQuestion} prompts={["What categories need attention?", "Which categories are losing the most money to returns?", "How has paid vs organic channel mix changed?"]} />
+              </div>
+            </div></section>
+
+            <section><div className="dash-two-col">
               <SectionCard
                 icon={Trophy}
                 title="Category leaderboard"
@@ -980,34 +1001,17 @@ export default function Page() {
               </SectionCard>
             </div></section>
 
-            <section><div className="insight-grid">
-              <SectionCard
-                icon={Megaphone}
-                title="Paid vs. organic channel mix"
-                description="Share of order items from paid channels (Facebook, Display, Email) vs. organic/direct (Search, Organic)."
-                action={channelMonths && channelMonths.length > 0 && <button className="button" onClick={() => downloadCsv("channel_mix.csv", channelMonths)}><Download size={14} />CSV</button>}
-              >
-                {!channelMonths ? <div className="muted small">Loading channel mix&hellip;</div> : <>
-                  <ChannelChart months={channelMonths} />
-                  <div className="chart-footer-line muted small">Denominator: {number(channelMonths[channelMonths.length - 1].total)} order items in the latest period.</div>
-                </>}
-              </SectionCard>
-              <SectionCard icon={TrendingDown} title="Returns leakage snapshot" description="Categories losing the most margin to returns, from the same diagnostic Ask Loupe uses.">
-                {!leakageRows ? <div className="muted small">Loading leakage data&hellip;</div> : leakageRows.length === 0 ? <div className="muted small">No leakage data available.</div> : <ReturnsLeakageSnapshot rows={leakageRows} />}
-              </SectionCard>
-            </div></section>
-
-            <section><SectionCard icon={ShieldCheck} title="Data confidence" description="Live source status for everything shown on this tab.">
-              <div className="confidence-rows">
-                <div className="confidence-row"><span className="muted small">Source</span><Badge tone={data.source_health.status === "healthy" ? "accent" : "warning"}>{data.source_health.status}</Badge></div>
-                <div className="confidence-row"><span className="muted small">Certification</span><span>{data.metric_context.certification_status}</span></div>
-                <div className="confidence-row"><span className="muted small">Reporting grain</span><span>{data.metric_context.reporting_grain}</span></div>
-                <div className="confidence-row"><span className="muted small">Active filters</span><span>{activeFilterCount > 0 ? `${activeFilterCount} applied` : "None"}</span></div>
-              </div>
-              {data.source_health.warning && <div className="health-warning">{data.source_health.warning}</div>}
+            <section><SectionCard
+              icon={Megaphone}
+              title="Paid vs. organic channel mix"
+              description="Share of order items from paid channels (Facebook, Display, Email) vs. organic/direct (Search, Organic)."
+              action={channelMonths && channelMonths.length > 0 && <button className="button" onClick={() => downloadCsv("channel_mix.csv", channelMonths)}><Download size={14} />CSV</button>}
+            >
+              {!channelMonths ? <div className="muted small">Loading channel mix&hellip;</div> : <>
+                <ChannelChart months={channelMonths} compact />
+                <div className="chart-footer-line muted small">Denominator: {number(channelMonths[channelMonths.length - 1].total)} order items in the latest period.</div>
+              </>}
             </SectionCard></section>
-
-            <section><QuickAsk subtitle="Ask about categories, regions, or channel mix." disabled={asking} onAsk={askQuestion} prompts={["What categories need attention?", "Which categories are losing the most money to returns?", "How has paid vs organic channel mix changed?"]} /></section>
           </>}
 
           {activeView === "performance" && <>

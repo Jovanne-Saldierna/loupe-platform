@@ -275,6 +275,39 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .confidence-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 .confidence-row:last-child { border-bottom: 0; padding-bottom: 0; }
 
+/* --- Dashboard layout density -----------------------------------------
+   Dashboard-only classes (never used by Home/Performance/Ask Loupe, so
+   none of this can bleed into those tabs): a slim page header instead of
+   repeating the app-level hero, a compact filter toolbar instead of a
+   dominant top card, and a real grid -- big trend card + right-side stack,
+   then leaderboard/region side-by-side -- so the tab uses its full width
+   instead of one column of full-width stacked cards. */
+.dash-header h2 { font-size: 20px; margin: 0 0 4px; }
+
+.dash-toolbar {
+  display: flex; align-items: flex-end; flex-wrap: wrap; gap: 16px;
+  padding: 10px 16px; background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+}
+.dash-toolbar-icon { color: var(--muted-foreground); margin-bottom: 9px; flex: 0 0 auto; }
+.dash-toolbar-spacer { flex: 1 1 auto; min-width: 8px; }
+
+.dash-primary-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 20px; align-items: start; }
+.dash-side-stack { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+/* Side-stack cards run narrower than the main column, so trim the base
+   32px card padding down to keep them reading as compact admin-panel
+   modules instead of the same spacious card used for the big trend chart. */
+.dash-side-stack > .card { padding: 20px 22px; }
+
+.dash-two-col { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+
+@media (max-width: 1200px) {
+  .dash-primary-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  .dash-two-col { grid-template-columns: 1fr; }
+  .dash-toolbar { align-items: stretch; }
+}
+
 /* Single-month channel snapshot (no fake trend line for one data point). */
 .channel-snapshot { margin-top: 4px; }
 .channel-snapshot-bar { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--muted); }
