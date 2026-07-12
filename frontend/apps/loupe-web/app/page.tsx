@@ -909,11 +909,6 @@ export default function Page() {
           </>}
 
           {activeView === "dashboard" && <div className="dash-surface">
-            <section className="dash-header">
-              <h2>Dashboard</h2>
-              <div className="muted small">Revenue, margin, and returns performance across the current filter scope.</div>
-            </section>
-
             <section><div className="metric-grid">
               <Stat icon={DollarSign} label="Revenue" value={money(data.revenue.value)} change={delta(data.revenue.change_pct)} note="vs. prior period" />
               <Stat icon={Percent} label="Margin" value={money(data.revenue.value * (data.gross_margin_pct.value / 100))} change={delta(data.gross_margin_pct.change_pct, " pts")} note="vs. prior period" />

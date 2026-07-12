@@ -286,7 +286,12 @@ select[multiple].select { min-height: 84px; padding: 6px; }
    dominant top card, and a real grid -- big trend card + right-side stack,
    then leaderboard/region side-by-side -- so the tab uses its full width
    instead of one column of full-width stacked cards. */
-.dash-header h2 { font-size: 20px; margin: 0 0 4px; }
+/* Dashboard-only vertical rhythm between its own sections (KPI row,
+   toolbar, primary grid, secondary grid, channel card). The shared
+   .dashboard-surface flex/gap only spaces the hero header from this
+   wrapper as a single item, so without this the sections underneath had
+   no gap of their own. */
+.dash-surface { display: flex; flex-direction: column; gap: 18px; }
 
 .dash-toolbar {
   display: flex; align-items: flex-end; flex-wrap: wrap; gap: 14px;
@@ -303,19 +308,22 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .dash-toolbar .reset-filters-btn { padding: 5px 11px; font-size: 12px; }
 .dash-toolbar .msd { min-width: 150px; }
 
-.dash-primary-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 20px; align-items: start; }
+.dash-primary-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, .8fr); gap: 20px; align-items: start; }
 .dash-side-stack { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 /* Side-stack cards run narrower than the main column, so trim the base
    32px card padding down to keep them reading as compact admin-panel
    modules instead of the same spacious card used for the big trend chart. */
 .dash-side-stack > .card { padding: 20px 22px; }
 
-.dash-two-col { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+/* Leaderboard (6 grid columns internally) and Revenue by Region both need
+   real width to stay legible -- a 360px floor keeps them from squeezing
+   into cramped columns before the breakpoint stacks them. */
+.dash-two-col { display: grid; grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr); gap: 20px; align-items: start; }
 
-@media (max-width: 1200px) {
+@media (max-width: 1280px) {
   .dash-primary-grid { grid-template-columns: 1fr; }
 }
-@media (max-width: 900px) {
+@media (max-width: 1040px) {
   .dash-two-col { grid-template-columns: 1fr; }
   .dash-toolbar { align-items: stretch; }
 }
@@ -516,7 +524,11 @@ select[multiple].select { min-height: 84px; padding: 6px; }
    sidebar+canvas pair; the sidebar reads as an attached rail via a single
    hairline divider, same as shadcn's sidebar component sitting flush next
    to the page content. */
-.product-loupe { max-width: 1440px; margin: 0 auto; }
+/* Wider canvas: 1440px read as a narrow, centered webpage on the common
+   1600-1920px monitor widths this app actually runs at. 1760px keeps a
+   sane reading measure for Home's prose cards while giving the Dashboard's
+   grids meaningfully more room to breathe than a fixed admin-panel width. */
+.product-loupe { max-width: 1760px; margin: 0 auto; }
 .product-loupe .app-shell { gap: 0; align-items: stretch; }
 .product-loupe .sidebar {
   background: transparent; border: 0; border-right: 1px solid var(--border); border-radius: 0;
