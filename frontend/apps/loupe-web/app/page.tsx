@@ -8,7 +8,8 @@ import {
   Lightbulb, ListChecks, MapPin, Megaphone, MessageSquareText, PackageSearch, Percent, RotateCcw, ScanSearch,
   ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, Target, TriangleAlert, TrendingDown, TrendingUp, Trophy,
 } from "lucide-react";
-import { AppShell, Badge, Card, Unavailable } from "@loupe/ui";
+import { ActionFeed, AppShell, Badge, Card, DashKpiTile, InsightTiles, MiniCompareCard, MiniStatStrip, MiniStatusCard, SectionCard, Stat, Unavailable } from "@loupe/ui";
+import type { CardTone, FeedItem } from "@loupe/ui";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -680,53 +681,6 @@ function AskInsightBody({ response, insight }: { response: AskResponse; insight:
   );
 }
 
-// One consistent card shape used everywhere on the dashboard/performance
-// tabs -- header (icon + title), description, optional action, then
-// content -- so sections read as one cohesive workspace instead of
-// mismatched ad hoc cards with a floating label stacked above them.
-function SectionCard({ icon: Icon, title, description, action, className = "", children }: { icon?: ComponentType<{ size?: number }>; title: string; description?: string; action?: ReactNode; className?: string; children: ReactNode }) {
-  return (
-    <Card className={`section-card ${className}`}>
-      <div className="card-head">
-        <div><h2>{Icon && <span className="section-card-icon"><Icon size={16} /></span>}{title}</h2>{description && <div className="muted small">{description}</div>}</div>
-        {action}
-      </div>
-      {children}
-    </Card>
-  );
-}
-
-// Dashboard-only insight primitives, built only from data the card already
-// fetched -- no new endpoints, no invented numbers. MiniStatStrip is a row
-// of small label/value pairs (KPI readouts, source-mix summary). InsightTiles
-// is 3 slightly larger label/name/value cards (quick category/region
-// takeaways) that read as "here's what to look at" before a longer table.
-function MiniStatStrip({ items, className = "" }: { items: { label: string; value: string }[]; className?: string }) {
-  return (
-    <div className={`mini-stat-strip ${className}`}>
-      {items.map((it) => (
-        <div className="mini-stat" key={it.label}>
-          <span className="mini-stat-label">{it.label}</span>
-          <span className="mini-stat-value">{it.value}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-function InsightTiles({ items }: { items: { label: string; name: string; value: string }[] }) {
-  return (
-    <div className="insight-tiles">
-      {items.map((it) => (
-        <div className="insight-tile" key={it.label}>
-          <span className="insight-tile-label">{it.label}</span>
-          <span className="insight-tile-name">{it.name}</span>
-          <span className="insight-tile-value">{it.value}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function median(nums: number[]) {
   if (!nums.length) return 0;
   const sorted = [...nums].sort((a, b) => a - b);
@@ -849,27 +803,6 @@ function computeBridgeMetrics(overview: Overview) {
   return { revChangePct, priorRevenue, currentRevenue: overview.revenue.value, currentMargin, priorMargin, marginChangePct, marginRateChange, itemsChangePct };
 }
 
-type CardTone = "up" | "down" | "neutral";
-function MiniCompareCard({ icon: Icon, label, value, prior, deltaLabel, tone, pct }: { icon: ComponentType<{ size?: number }>; label: string; value: string; prior: string; deltaLabel: string; tone: CardTone; pct: number }) {
-  return (
-    <div className="mini-compare-card">
-      <div className="mini-card-head"><span className="mini-card-icon"><Icon size={13} /></span><span>{label}</span><span className={`mini-card-delta mini-card-delta-${tone}`}>{deltaLabel}</span></div>
-      <div className="mini-card-value">{value}</div>
-      <div className="mini-card-bar-track"><span className={`mini-card-bar-fill mini-card-bar-${tone}`} style={{ width: `${Math.max(4, Math.min(100, pct))}%` }} /></div>
-      <div className="mini-card-sub muted small">Prior {prior}</div>
-    </div>
-  );
-}
-function MiniStatusCard({ icon: Icon, label, value, deltaLabel, status, tone }: { icon: ComponentType<{ size?: number }>; label: string; value: string; deltaLabel: string; status: string; tone: CardTone }) {
-  return (
-    <div className="mini-compare-card">
-      <div className="mini-card-head"><span className="mini-card-icon"><Icon size={13} /></span><span>{label}</span><span className={`mini-card-delta mini-card-delta-${tone}`}>{deltaLabel}</span></div>
-      <div className="mini-card-value">{value}</div>
-      <span className={`mini-card-status mini-card-status-${tone}`}>{status}</span>
-    </div>
-  );
-}
-
 // Dashboard-only: Overview mini-card grid -- replaces the old narrative
 // Performance Bridge card with four compact status/comparison tiles
 // (2x2) instead of one large chart-less report block. Every value comes
@@ -896,30 +829,6 @@ function OverviewMiniGrid({ overview }: { overview: Overview }) {
       />
       <MiniStatusCard icon={ShieldCheck} label="Margin rate" value={`${overview.gross_margin_pct.value.toFixed(1)}%`} deltaLabel={delta(m.marginRateChange, " pts")} status={marginStatusLabel} tone={marginTone} />
       <MiniStatusCard icon={ShoppingBag} label="Items sold" value={number(overview.order_items.value)} deltaLabel={delta(m.itemsChangePct)} status={m.itemsChangePct === null ? "No prior period" : m.itemsChangePct >= 0 ? "Growing" : "Declining"} tone={itemsTone} />
-    </div>
-  );
-}
-
-type FeedPriority = "high" | "medium" | "info";
-type FeedItem = { icon: ComponentType<{ size?: number }>; title: string; metric: string; priority: FeedPriority };
-
-// Dashboard-only: Action queue as a compact activity/action feed -- a
-// priority dot, icon, short action label, and a metric pill per row,
-// instead of prose "Investigate / Review" sentences. Same underlying
-// signals as before (returns leakage, category, region, channel), each
-// still conditional on its own signal actually being present in the data.
-function ActionFeed({ items }: { items: FeedItem[] }) {
-  if (!items.length) return <p className="muted small">Not enough data yet to generate action recommendations.</p>;
-  return (
-    <div className="action-feed">
-      {items.map((a) => (
-        <div className="feed-row" key={a.title}>
-          <span className={`feed-dot feed-dot-${a.priority}`} />
-          <span className="feed-icon"><a.icon size={14} /></span>
-          <span className="feed-title">{a.title}</span>
-          <span className="feed-metric">{a.metric}</span>
-        </div>
-      ))}
     </div>
   );
 }
@@ -993,60 +902,6 @@ function ChannelMixWidget({ month }: { month: ChannelMonthRow }) {
         <span className={`pill ${dominant === "Paid" ? "pill-watch" : "pill-healthy"}`}>{dominant} dominant</span>
         <span className="muted small">{number(month.total)} items</span>
       </div>
-    </div>
-  );
-}
-
-// KPI tile: label + value + a colored delta badge (up/down icon, not just
-// text) + an optional small contextual note -- the shadcnspace metric-tile
-// composition, reused across Home/Dashboard/Performance instead of each
-// tab inventing its own KPI markup.
-// `icon` is optional and additive-only: Home/Performance keep calling Stat
-// without it (identical rendering to before), while Dashboard passes a
-// semantic lucide icon for the shadcnspace-style metric tile header.
-function Stat({ label, value, change, note, icon: Icon }: { label: string; value: string; change: string; note?: string; icon?: ComponentType<{ size?: number }> }) {
-  const unavailable = change === "Prior period unavailable";
-  const positive = !unavailable && change.startsWith("+");
-  const negative = !unavailable && change.startsWith("-");
-  const tone = unavailable ? "neutral" : positive ? "up" : negative ? "down" : "neutral";
-  return (
-    <Card className="metric-tile">
-      <div className="stat-label">{Icon && <span className="metric-tile-icon"><Icon size={13} /></span>}{label}</div>
-      <div className="stat-line">
-        <span className="stat-value">{value}</span>
-        <span className={`metric-delta metric-delta-${tone}`}>
-          {positive && <TrendingUp size={12} />}
-          {negative && <TrendingDown size={12} />}
-          {change}
-        </span>
-      </div>
-      {note && <div className="metric-tile-note muted small">{note}</div>}
-    </Card>
-  );
-}
-
-// Dashboard-only KPI tile: label+icon, value+delta, and a thin spark/
-// progress fill derived from the same change_pct/value the tile already
-// displays -- a visual encoding of the number shown, not a new data source.
-// `invertTone` flips up/down coloring for metrics where a rise is bad
-// (return rate).
-function DashKpiTile({
-  icon: Icon, label, value, changePct, changeSuffix = "%", invertTone = false, sparkPct, badge,
-}: {
-  icon: ComponentType<{ size?: number }>; label: string; value: string; changePct: number | null;
-  changeSuffix?: string; invertTone?: boolean; sparkPct: number; badge?: ReactNode;
-}) {
-  const rawTone = changePct === null ? "neutral" : changePct > 0 ? "up" : changePct < 0 ? "down" : "neutral";
-  const tone = invertTone && rawTone !== "neutral" ? (rawTone === "up" ? "down" : "up") : rawTone;
-  return (
-    <div className="dash-kpi-tile">
-      <div className="dash-kpi-head"><span className="dash-kpi-icon"><Icon size={13} /></span>{label}</div>
-      <div className="dash-kpi-value-row">
-        <span className="dash-kpi-value">{value}</span>
-        <span className={`dash-kpi-delta dash-kpi-delta-${tone}`}>{delta(changePct, changeSuffix)}</span>
-        {badge}
-      </div>
-      <div className="dash-kpi-spark-track"><span className={`dash-kpi-spark-fill dash-kpi-spark-${tone}`} style={{ width: `${Math.max(4, Math.min(100, sparkPct))}%` }} /></div>
     </div>
   );
 }
@@ -1237,14 +1092,14 @@ export default function Page() {
 
           {activeView === "dashboard" && <div className="dash-surface">
             <section><div className="dash-kpi-row">
-              <DashKpiTile icon={DollarSign} label="Revenue" value={money(data.revenue.value)} changePct={data.revenue.change_pct} sparkPct={Math.abs(data.revenue.change_pct ?? 0) * 5} />
-              <DashKpiTile icon={Percent} label="Margin" value={money(data.revenue.value * (data.gross_margin_pct.value / 100))} changePct={data.gross_margin_pct.change_pct} changeSuffix=" pts" sparkPct={Math.abs(data.gross_margin_pct.change_pct ?? 0) * 10} />
+              <DashKpiTile icon={DollarSign} label="Revenue" value={money(data.revenue.value)} changePct={data.revenue.change_pct} changeLabel={delta(data.revenue.change_pct)} sparkPct={Math.abs(data.revenue.change_pct ?? 0) * 5} />
+              <DashKpiTile icon={Percent} label="Margin" value={money(data.revenue.value * (data.gross_margin_pct.value / 100))} changePct={data.gross_margin_pct.change_pct} changeLabel={delta(data.gross_margin_pct.change_pct, " pts")} sparkPct={Math.abs(data.gross_margin_pct.change_pct ?? 0) * 10} />
               <DashKpiTile
-                icon={RotateCcw} label="Return rate" value={`${data.return_rate_pct.value.toFixed(1)}%`} changePct={data.return_rate_pct.change_pct} changeSuffix=" pts" invertTone
+                icon={RotateCcw} label="Return rate" value={`${data.return_rate_pct.value.toFixed(1)}%`} changePct={data.return_rate_pct.change_pct} changeLabel={delta(data.return_rate_pct.change_pct, " pts")} invertTone
                 sparkPct={(data.return_rate_pct.value / 30) * 100}
                 badge={<span className={`pill ${returnRatePill(data.return_rate_pct.value).cls}`}>{returnRatePill(data.return_rate_pct.value).label}</span>}
               />
-              <DashKpiTile icon={ShoppingBag} label="Items sold" value={number(data.order_items.value)} changePct={data.order_items.change_pct} sparkPct={Math.abs(data.order_items.change_pct ?? 0) * 5} />
+              <DashKpiTile icon={ShoppingBag} label="Items sold" value={number(data.order_items.value)} changePct={data.order_items.change_pct} changeLabel={delta(data.order_items.change_pct)} sparkPct={Math.abs(data.order_items.change_pct ?? 0) * 5} />
             </div></section>
 
             <section>
