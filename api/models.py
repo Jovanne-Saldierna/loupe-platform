@@ -52,6 +52,17 @@ class LoupeOverviewResponse(BaseModel):
     data_source: Literal["BigQuery live"] = "BigQuery live"
 
 
+class LoupeAskRequest(BaseModel):
+    question: str = Field(min_length=3, max_length=1_000)
+
+
+class LoupeAskResponse(BaseModel):
+    category: str
+    answer: str
+    source_health_status: Optional[str]
+    source_health_warning: Optional[str]
+
+
 class ErrorResponse(BaseModel):
     detail: str = Field(description="Safe user-facing error without raw infrastructure details")
 
@@ -106,3 +117,50 @@ class GovernanceReviewResponse(BaseModel):
     source_health: str
     active_incident_ids: list[str]
     alignment: list[ContractAlignment]
+
+
+class TriageTableHealth(BaseModel):
+    table_id: str
+    status: Literal["healthy", "degraded", "critical", "unknown"]
+    freshness_minutes: Optional[float]
+    active_incident_count: int
+
+
+class TriageIncident(BaseModel):
+    incident_id: str
+    table_id: str
+    check_type: str
+    severity: str
+    status: str
+    created_at: str
+    observed_value: Optional[float]
+    expected_value: Optional[float]
+    affected_metrics: list[str]
+    owner: Optional[str]
+    next_allowed_statuses: list[str]
+
+
+class TriageWarehouseResponse(BaseModel):
+    generated_at: str
+    dataset: str
+    monitored_tables: int
+    healthy_tables: int
+    degraded_tables: int
+    critical_tables: int
+    open_incidents: int
+    freshness_minutes: Optional[float]
+    tables: list[TriageTableHealth]
+    incidents: list[TriageIncident]
+
+
+class IncidentTransitionRequest(BaseModel):
+    target_status: Literal["acknowledged", "investigating", "mitigated", "resolved", "open"]
+    expected_current_status: str
+    resolution_notes: Optional[str] = Field(default=None, max_length=2_000)
+
+
+class IncidentTransitionResponse(BaseModel):
+    incident_id: str
+    status: str
+    persisted: bool
+    row_version: Optional[int]

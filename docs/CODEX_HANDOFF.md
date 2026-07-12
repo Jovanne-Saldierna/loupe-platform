@@ -161,6 +161,29 @@ The exact mockup is locked. Do not reinterpret, simplify, or redesign it without
 
 Frontend implementation may now begin. Intended direction: Next.js + TypeScript + shadcn/ui over a typed FastAPI boundary, reusing the existing framework-independent Python services.
 
+## Dedicated UI phase: complete locally
+
+The locked primary experiences are now implemented as three separate Next.js applications over a typed FastAPI boundary:
+
+- Loupe (`frontend/apps/loupe-web`, port 3000): live BigQuery KPIs and trend, deterministic insight, persisted certification/source-health evidence, and grounded Ask Loupe.
+- Governance (`frontend/apps/governance-web`, port 3001): persisted metric selector, user-submitted SQL, deterministic review/trust score, findings, and contract alignment.
+- Triage (`frontend/apps/triage-web`, port 3002): persisted warehouse/source health, active incident queue, evidence timeline, and governed lifecycle transitions.
+- Shared product system: `frontend/packages/ui`.
+- Typed API: `api/`, port 8000.
+
+The approved HTML checksum remains unchanged. Browser QA was performed at the reference desktop width and at a 390px mobile viewport. Captures are stored locally under ignored `output/playwright/`.
+
+Validation at completion:
+
+- Full Python suite: `890 passed, 1 skipped`.
+- Focused final API/import/package suite: `11 passed, 1 skipped`.
+- All three Next.js 16.2.10 production builds pass.
+- Live browser reads succeeded against `loupe_platform_test`; no mock KPI, catalog, review, or incident fallback was introduced.
+
+The repository is protected by local Git. Baseline commit: `b8925a5`; Governance slice: `13d5b29`. The final UI completion commit follows this handoff update.
+
+Deployment is intentionally not guessed. The three frontend hosting targets, API hosting target, and public URLs remain the next explicit product/deployment decision.
+
 ## Next-chat instructions
 
 1. Read this file first.

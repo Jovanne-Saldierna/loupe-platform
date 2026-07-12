@@ -61,6 +61,7 @@ def build_governance_review(client: Any, sql: str, metric_name: str) -> Governan
     approved_observed = [table for table in review.referenced_tables if table in definition.approved_source_tables]
     unapproved_observed = [table for table in review.referenced_tables if table not in approved_tables]
     source_status = evidence.worst_health.status if evidence.worst_health else "unknown"
+    grain_label = definition.measurement_grain.split(" -- ", 1)[0]
 
     return GovernanceReviewResponse(
         metric=CatalogMetric(
@@ -84,8 +85,8 @@ def build_governance_review(client: Any, sql: str, metric_name: str) -> Governan
         alignment=[
             ContractAlignment(
                 contract="Measurement grain",
-                expected=definition.measurement_grain,
-                observed=definition.measurement_grain if "Grain" not in finding_categories else "undeclared",
+                expected=grain_label,
+                observed=grain_label if "Grain" not in finding_categories else "undeclared",
                 status="Aligned" if "Grain" not in finding_categories else "Review",
             ),
             ContractAlignment(

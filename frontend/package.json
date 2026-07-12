@@ -13,7 +13,7 @@
   },
   "overrides": {
     "next": {
-      "postcss": "8.5.10"
+      "postcss": "$postcss"
     }
   },
   "devDependencies": {

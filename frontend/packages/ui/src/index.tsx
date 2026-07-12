@@ -25,7 +25,7 @@ export function AppShell({
   navigation: { label: string; icon: ComponentType<{ size?: number }>; active?: boolean }[];
   children: ReactNode;
 }) {
-  return <div className={`product product-${active}`}><PlatformLinks active={active} /><div className="app-shell"><aside className="sidebar"><div className="brand"><BrandIcon size={17} />{brand}</div><nav className="app-nav">{navigation.map(({ label, icon: Icon, active: selected }) => <button className={`nav-item ${selected ? "active" : ""}`} key={label}><Icon size={17} />{label}</button>)}</nav></aside><main className="workspace">{children}</main></div></div>;
+  return <div className={`product product-${active}`}><PlatformLinks active={active} /><div className="app-shell"><aside className="sidebar"><div className="brand"><BrandIcon size={17} />{brand}</div><nav className="app-nav" aria-label={`${brand} sections`}>{navigation.map(({ label, icon: Icon, active: selected }) => <button type="button" className={`nav-item ${selected ? "active" : ""}`} aria-current={selected ? "page" : undefined} aria-disabled={!selected} disabled={!selected} key={label}><Icon size={17} />{label}</button>)}</nav></aside><main className="workspace">{children}</main></div></div>;
 }
 
 export function Badge({ children, tone = "accent" }: { children: ReactNode; tone?: "accent" | "neutral" | "warning" }) {
