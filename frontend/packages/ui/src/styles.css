@@ -308,43 +308,39 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .dash-toolbar .reset-filters-btn { padding: 5px 11px; font-size: 12px; }
 .dash-toolbar .msd { min-width: 150px; }
 
-/* One CSS-grid-areas layout for everything below the toolbar, replacing the
-   old "primary grid" + "two-col" as separate stacked sections. That split
-   caused a dead zone: the right stack (Leakage + Confidence, previously also
-   Ask Loupe) could run taller than the compact trend chart, so the next
-   section -- Category Leaderboard -- couldn't start until the *tallest*
-   column finished, leaving a large blank gap under the shorter chart
-   column. Putting the leaderboard in the same grid, in the trend's own
-   column, makes it flow immediately under the chart regardless of how tall
-   the right column is. */
+/* One CSS-grid-areas layout for everything below the toolbar. Reads as a
+   story top-to-bottom: performance (bridge) + action queue, then risk
+   (returns priority map) + leakage detail, then drivers (leaderboard +
+   region), then channel mix full-width. Data Confidence is deliberately
+   NOT in this grid -- it's trust metadata, not business insight, so it
+   lives in its own quiet full-width strip below (.dash-confidence-strip). */
 .dash-content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) minmax(320px, .8fr);
   grid-template-areas:
-    "trend       leakage"
-    "trend       confidence"
-    "matrix      ."
+    "bridge      actions"
+    "matrix      leakage"
     "leaderboard region"
     "channel     channel";
   gap: 20px;
   align-items: start;
 }
-.dash-area-trend { grid-area: trend; }
+.dash-area-bridge { grid-area: bridge; }
+.dash-area-actions { grid-area: actions; }
 .dash-area-leakage { grid-area: leakage; }
-.dash-area-confidence { grid-area: confidence; }
 .dash-area-matrix { grid-area: matrix; }
 .dash-area-leaderboard { grid-area: leaderboard; }
 .dash-area-region { grid-area: region; }
 .dash-area-channel { grid-area: channel; }
-/* Leakage/Confidence run narrower than the main column, so trim the base
+/* Actions/Leakage run narrower than the main column, so trim the base
    32px card padding down to keep them reading as compact admin-panel
-   modules instead of the same spacious card used for the big trend chart. */
-.dash-area-leakage, .dash-area-confidence { padding: 20px 22px; }
+   modules instead of the same spacious card used for the big bridge card. */
+.dash-area-actions, .dash-area-leakage { padding: 20px 22px; }
 
 @media (max-width: 1280px) {
   .dash-content-grid {
     grid-template-columns: 1fr;
-    grid-template-areas: "trend" "leakage" "confidence" "matrix" "leaderboard" "region" "channel";
+    grid-template-areas: "bridge" "actions" "matrix" "leakage" "leaderboard" "region" "channel";
   }
   .dash-toolbar { align-items: stretch; }
 }
@@ -612,7 +608,7 @@ select[multiple].select { min-height: 84px; padding: 6px; }
    the 24px default so cards read as a tight admin surface, not oversized
    marketing panels. */
 .dash-surface .card { padding: 22px; border-radius: 16px; box-shadow: 0 1px 2px rgba(16, 24, 40, .05); }
-.dash-surface .dash-area-leakage, .dash-surface .dash-area-confidence { padding: 18px 20px; }
+.dash-surface .dash-area-leakage, .dash-surface .dash-area-actions { padding: 18px 20px; }
 
 /* Card headers: compact icon+title row, smaller title, tighter description. */
 .dash-surface .card-head { margin-bottom: 10px; gap: 10px; }
@@ -694,7 +690,7 @@ select[multiple].select { min-height: 84px; padding: 6px; }
    the same risk/watch/healthy/accent tokens already used elsewhere on the
    dashboard (pill-risk red, pill-watch amber, pill-healthy green, accent
    blue) instead of introducing a new palette. */
-.matrix-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 10px; }
+.matrix-legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 8px; }
 .matrix-legend-item { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted-foreground); }
 .matrix-legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
 .matrix-act-now .matrix-legend-dot { background: #c0362c; }
@@ -702,9 +698,9 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .matrix-watchlist .matrix-legend-dot { background: #b7791f; }
 .matrix-stable .matrix-legend-dot { background: #1b7a43; }
 
-.priority-map-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.priority-map-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .priority-row {
-  display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 9px 11px;
+  display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 7px 10px;
   border-radius: 10px; background: var(--muted); border-left: 3px solid var(--border);
 }
 .matrix-act-now.priority-row { border-left-color: #c0362c; }
@@ -741,3 +737,41 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 @media (max-width: 640px) {
   .priority-map-grid { grid-template-columns: 1fr; }
 }
+
+/* --- Performance bridge --------------------------------------------------
+   Current-vs-prior comparison bars, replacing the old overlapping revenue/
+   margin area chart. Two stacked mini bar-pairs (prior/current) instead of
+   a line chart -- reads correctly even when the underlying series is short
+   or noisy, and needs no axis. */
+.bridge-bars { display: flex; flex-direction: column; gap: 12px; margin-bottom: 10px; }
+.bridge-metric-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12.5px; font-weight: 650; margin-bottom: 6px; }
+.bridge-bar-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 8px; margin-top: 4px; }
+.bridge-bar-label { text-align: right; }
+.bridge-bar-track { height: 9px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.bridge-bar-fill { display: block; height: 100%; border-radius: inherit; }
+.bridge-bar-prior { background: var(--border); }
+.bridge-bar-current { background: var(--accent); }
+.bridge-bar-value { text-align: right; white-space: nowrap; font-size: 12.5px; font-weight: 650; min-width: 64px; }
+
+/* --- Executive action queue ----------------------------------------------
+   3-4 compact recommendation rows, each generated from data another card on
+   this dashboard already renders (returns leakage, category, region,
+   channel), so the queue and the cards it references never disagree. */
+.action-queue { display: flex; flex-direction: column; gap: 6px; }
+.action-row { display: flex; align-items: flex-start; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.action-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.action-row-icon { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 7px; background: var(--accent-soft); color: var(--accent); margin-top: 1px; }
+.action-row-body { flex: 1 1 auto; min-width: 0; }
+.action-row-title { font-size: 12.5px; font-weight: 650; }
+.action-row-reason { line-height: 1.35; margin-top: 1px; }
+.action-row-metric { flex: 0 0 auto; font-size: 12px; font-weight: 650; color: var(--muted-foreground); white-space: nowrap; align-self: center; }
+
+/* --- Data confidence strip ------------------------------------------------
+   Trust metadata demoted to a quiet, full-width footer instead of a card in
+   the prime right column -- smaller type, no border/shadow beyond a single
+   top hairline, so it visually reads as status text, not an insight. */
+.dash-confidence-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; padding: 12px 4px 0; border-top: 1px solid var(--border); }
+.confidence-strip-head { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; color: var(--muted-foreground); flex: 0 0 auto; }
+.confidence-strip-head svg { color: var(--muted-foreground); }
+.confidence-strip-row { display: flex; flex-wrap: wrap; gap: 18px; flex: 1 1 auto; }
+.confidence-strip-item { display: flex; align-items: center; gap: 6px; font-size: 12.5px; white-space: nowrap; }

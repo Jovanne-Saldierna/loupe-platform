@@ -743,6 +743,34 @@ const MATRIX_QUADRANTS: { key: MatrixQuadrant; cls: string }[] = [
 ];
 const MATRIX_QUADRANT_ORDER: MatrixQuadrant[] = ["Act Now", "Margin Recovery", "Watchlist", "Stable"];
 
+// Shared classification step behind both the Returns Priority Map and the
+// Executive Action Queue's "investigate top priority category" row, so the
+// two surfaces always agree on which category is highest-priority. Returns
+// null when there isn't enough valid data to classify anything.
+function classifyLeakageRows(rows: LeakageRow[]) {
+  const valid = rows.filter((r) =>
+    r.category && Number.isFinite(r.margin_lost_to_returns) && Number.isFinite(r.return_rate_pct) && Number.isFinite(r.returned_items)
+  );
+  if (!valid.length) return null;
+  const top = [...valid].sort((a, b) => b.margin_lost_to_returns - a.margin_lost_to_returns).slice(0, 10);
+  const medianReturnRate = median(top.map((r) => r.return_rate_pct));
+  const medianMarginLost = median(top.map((r) => r.margin_lost_to_returns));
+  return top.map((r) => {
+    const highMargin = r.margin_lost_to_returns >= medianMarginLost;
+    const highReturn = r.return_rate_pct >= medianReturnRate;
+    const quadrant: MatrixQuadrant = highMargin && highReturn ? "Act Now" : highMargin ? "Margin Recovery" : highReturn ? "Watchlist" : "Stable";
+    return { ...r, quadrant };
+  });
+}
+// The single highest-priority row: the top (by margin lost) Act Now
+// category if one exists, otherwise the top margin-lost category overall.
+function topLeakagePriority(rows: LeakageRow[]) {
+  const classified = classifyLeakageRows(rows);
+  if (!classified) return null;
+  const actNow = classified.filter((r) => r.quadrant === "Act Now").sort((a, b) => b.margin_lost_to_returns - a.margin_lost_to_returns);
+  return actNow[0] ?? [...classified].sort((a, b) => b.margin_lost_to_returns - a.margin_lost_to_returns)[0];
+}
+
 // Dashboard-only: Returns Priority Map -- a dense grid of compact priority
 // rows (category, priority badge, margin lost, return rate, returned items,
 // an impact bar) instead of a scatterplot. return_rate_pct values in this
@@ -753,21 +781,9 @@ const MATRIX_QUADRANT_ORDER: MatrixQuadrant[] = ["Act Now", "Margin Recovery", "
 // Snapshot card (leakageRows state, fetched from the existing
 // /returns-leakage endpoint) -- no new endpoint, no invented numbers.
 function ReturnsPriorityMap({ rows }: { rows: LeakageRow[] }) {
-  const valid = rows.filter((r) =>
-    r.category && Number.isFinite(r.margin_lost_to_returns) && Number.isFinite(r.return_rate_pct) && Number.isFinite(r.returned_items)
-  );
-  if (!valid.length) return <p className="muted small">Returns priority map needs returns leakage data.</p>;
+  const classified = classifyLeakageRows(rows);
+  if (!classified) return <p className="muted small">Returns priority map needs returns leakage data.</p>;
 
-  const top = [...valid].sort((a, b) => b.margin_lost_to_returns - a.margin_lost_to_returns).slice(0, 10);
-  const medianReturnRate = median(top.map((r) => r.return_rate_pct));
-  const medianMarginLost = median(top.map((r) => r.margin_lost_to_returns));
-
-  const classified = top.map((r) => {
-    const highMargin = r.margin_lost_to_returns >= medianMarginLost;
-    const highReturn = r.return_rate_pct >= medianReturnRate;
-    const quadrant: MatrixQuadrant = highMargin && highReturn ? "Act Now" : highMargin ? "Margin Recovery" : highReturn ? "Watchlist" : "Stable";
-    return { ...r, quadrant };
-  });
   const quadrantCls = (q: MatrixQuadrant) => MATRIX_QUADRANTS.find((m) => m.key === q)!.cls;
   // Act Now first, then Margin Recovery / Watchlist / Stable; margin lost
   // descending within each priority group.
@@ -809,6 +825,99 @@ function ReturnsPriorityMap({ rows }: { rows: LeakageRow[] }) {
         ))}
       </div>
     </>
+  );
+}
+
+// Dashboard-only: Performance bridge -- replaces the old overlapping
+// revenue/margin area chart with a current-vs-prior comparison instead.
+// Prior revenue/margin are derived from the same relative (%) and point
+// (pts) deltas already used by the KPI row and Stat components elsewhere on
+// this dashboard (data.revenue.change_pct is a relative %, data.
+// gross_margin_pct.change_pct is a point delta) -- no new fields, no
+// invented numbers.
+function PerformanceBridge({ overview }: { overview: Overview }) {
+  const revChangePct = overview.revenue.change_pct;
+  const priorRevenue = revChangePct !== null && revChangePct !== -100 ? overview.revenue.value / (1 + revChangePct / 100) : null;
+  const currentMargin = overview.revenue.value * (overview.gross_margin_pct.value / 100);
+  const marginRateChange = overview.gross_margin_pct.change_pct;
+  const priorMarginRate = marginRateChange !== null ? overview.gross_margin_pct.value - marginRateChange : null;
+  const priorMargin = priorRevenue !== null && priorMarginRate !== null ? priorRevenue * (priorMarginRate / 100) : null;
+  const itemsChangePct = overview.order_items.change_pct;
+
+  const maxRevenue = Math.max(overview.revenue.value, priorRevenue ?? 0, 1);
+  const maxMargin = Math.max(currentMargin, priorMargin ?? 0, 1);
+
+  let interpretation: string | null = null;
+  if (revChangePct !== null && marginRateChange !== null) {
+    const revWord = revChangePct >= 0 ? `up ${revChangePct.toFixed(1)}%` : `down ${Math.abs(revChangePct).toFixed(1)}%`;
+    interpretation = marginRateChange >= 0
+      ? `Revenue is ${revWord} while margin rate is up ${marginRateChange.toFixed(1)} pts, indicating growth without margin compression.`
+      : `Revenue is ${revWord} while margin rate is down ${Math.abs(marginRateChange).toFixed(1)} pts, indicating margin compression.`;
+  }
+
+  return (
+    <>
+      <div className="bridge-bars">
+        <div className="bridge-metric">
+          <div className="bridge-metric-head"><span>Revenue</span><span className="delta">{delta(revChangePct)}</span></div>
+          <div className="bridge-bar-row">
+            <span className="bridge-bar-label muted small">Prior</span>
+            <span className="bridge-bar-track"><span className="bridge-bar-fill bridge-bar-prior" style={{ width: priorRevenue !== null ? `${(priorRevenue / maxRevenue) * 100}%` : "0%" }} /></span>
+            <span className="bridge-bar-value muted small">{priorRevenue !== null ? money(priorRevenue) : "—"}</span>
+          </div>
+          <div className="bridge-bar-row">
+            <span className="bridge-bar-label muted small">Current</span>
+            <span className="bridge-bar-track"><span className="bridge-bar-fill bridge-bar-current" style={{ width: `${(overview.revenue.value / maxRevenue) * 100}%` }} /></span>
+            <span className="bridge-bar-value">{money(overview.revenue.value)}</span>
+          </div>
+        </div>
+        <div className="bridge-metric">
+          <div className="bridge-metric-head"><span>Margin</span><span className="delta">{delta(marginRateChange, " pts")}</span></div>
+          <div className="bridge-bar-row">
+            <span className="bridge-bar-label muted small">Prior</span>
+            <span className="bridge-bar-track"><span className="bridge-bar-fill bridge-bar-prior" style={{ width: priorMargin !== null ? `${(priorMargin / maxMargin) * 100}%` : "0%" }} /></span>
+            <span className="bridge-bar-value muted small">{priorMargin !== null ? money(priorMargin) : "—"}</span>
+          </div>
+          <div className="bridge-bar-row">
+            <span className="bridge-bar-label muted small">Current</span>
+            <span className="bridge-bar-track"><span className="bridge-bar-fill bridge-bar-current" style={{ width: `${(currentMargin / maxMargin) * 100}%` }} /></span>
+            <span className="bridge-bar-value">{money(currentMargin)}</span>
+          </div>
+        </div>
+      </div>
+      <MiniStatStrip className="mini-stat-strip-chips" items={[
+        { label: "Margin rate", value: `${overview.gross_margin_pct.value.toFixed(1)}%` },
+        { label: "Margin rate Δ", value: delta(marginRateChange, " pts") },
+        ...(itemsChangePct !== null ? [{ label: "Items sold Δ", value: delta(itemsChangePct) }] : []),
+      ]} />
+      {interpretation && <p className="dash-insight-line">{interpretation}</p>}
+    </>
+  );
+}
+
+type ActionRow = { icon: ComponentType<{ size?: number }>; title: string; reason: string; metric: string };
+
+// Dashboard-only: Executive action queue -- 3-4 compact recommendation rows
+// generated from data already fetched elsewhere on the dashboard (returns
+// leakage, category, region, channel). Each row's presence is conditional
+// on its own signal actually being present in the data (e.g. the channel
+// row only appears when one source clearly dominates) rather than always
+// rendering a fixed set of rows.
+function ExecutiveActionQueue({ actions }: { actions: ActionRow[] }) {
+  if (!actions.length) return <p className="muted small">Not enough data yet to generate action recommendations.</p>;
+  return (
+    <div className="action-queue">
+      {actions.map((a) => (
+        <div className="action-row" key={a.title}>
+          <span className="action-row-icon"><a.icon size={15} /></span>
+          <div className="action-row-body">
+            <div className="action-row-title">{a.title}</div>
+            <div className="action-row-reason muted small">{a.reason}</div>
+          </div>
+          <span className="action-row-metric">{a.metric}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -988,6 +1097,60 @@ export default function Page() {
   const maxStateRevenue = rankedStateRows?.length ? Math.max(...rankedStateRows.map((s) => s.revenue)) : 0;
   const activeFilterCount = selectedCategories.length + selectedStates.length;
 
+  // Derived once here so the Executive Action Queue and each source card's
+  // own insight strip (Region, Channel) always report the same numbers.
+  const regionTotalRevenue = rankedStateRows?.length ? rankedStateRows.reduce((sum, s) => sum + s.revenue, 0) : 0;
+  const topRegionRow = rankedStateRows?.length ? rankedStateRows[0] : null;
+  const top3RegionShare = rankedStateRows?.length && regionTotalRevenue ? (rankedStateRows.slice(0, 3).reduce((sum, s) => sum + s.revenue, 0) / regionTotalRevenue) * 100 : 0;
+  const latestChannelMonth = channelMonths?.length ? channelMonths[channelMonths.length - 1] : null;
+  const topPriorityLeakageRow = leakageRows ? topLeakagePriority(leakageRows) : null;
+  const highRevHighReturnCategory = (() => {
+    if (!displayedCategoryRows || displayedCategoryRows.length < 2) return null;
+    const medRevenue = median(displayedCategoryRows.map((r) => r.revenue));
+    const medReturn = median(displayedCategoryRows.map((r) => r.return_rate_pct));
+    const candidates = displayedCategoryRows.filter((r) => r.revenue >= medRevenue && r.return_rate_pct >= medReturn);
+    return candidates.length ? [...candidates].sort((a, b) => b.revenue - a.revenue)[0] : null;
+  })();
+
+  const actionQueueItems: ActionRow[] = [];
+  if (topPriorityLeakageRow) {
+    actionQueueItems.push({
+      icon: TrendingDown,
+      title: `Investigate ${topPriorityLeakageRow.category}`,
+      reason: `Top returns-priority category (${topPriorityLeakageRow.quadrant}) in the Returns priority map.`,
+      metric: money(topPriorityLeakageRow.margin_lost_to_returns),
+    });
+  }
+  if (highRevHighReturnCategory) {
+    actionQueueItems.push({
+      icon: TriangleAlert,
+      title: `Review ${highRevHighReturnCategory.category}`,
+      reason: "High revenue paired with an above-median return rate among displayed categories.",
+      metric: `${highRevHighReturnCategory.return_rate_pct.toFixed(1)}% return`,
+    });
+  }
+  if (topRegionRow && top3RegionShare >= 40) {
+    actionQueueItems.push({
+      icon: MapPin,
+      title: `Watch ${topRegionRow.state}`,
+      reason: `Top 3 regions concentrate ${top3RegionShare.toFixed(0)}% of displayed regional revenue.`,
+      metric: money(topRegionRow.revenue),
+    });
+  }
+  if (latestChannelMonth) {
+    const paidPct = latestChannelMonth.paid_share_pct;
+    if (paidPct >= 65 || paidPct <= 35) {
+      const dominant = paidPct >= 65 ? "Paid" : "Organic";
+      const dominantShare = paidPct >= 65 ? paidPct : 100 - paidPct;
+      actionQueueItems.push({
+        icon: Megaphone,
+        title: "Monitor channel mix",
+        reason: `${dominant} channels currently drive ${dominantShare.toFixed(1)}% of order items.`,
+        metric: dominant,
+      });
+    }
+  }
+
   return (
     <AppShell active="loupe" brand="Loupe" brandIcon={ScanSearch} navigation={nav}>
       <div className="dashboard-surface">
@@ -1064,17 +1227,12 @@ export default function Page() {
                 (same grid column) instead of waiting for the right-side
                 stack's height -- that mismatch was the dead-zone bug. */}
             <section><div className="dash-content-grid">
-              <SectionCard className="dash-area-trend" icon={TrendingUp} title="Revenue & margin trend" description="Revenue and margin are plotted together so the profitability trend is visible alongside top-line growth, not just revenue in isolation.">
-                {data.trend.length > 0 && (() => { const latest = data.trend[data.trend.length - 1]; const marginRate = latest.revenue ? (latest.margin / latest.revenue) * 100 : null; return (
-                  <MiniStatStrip className="mini-stat-strip-chips" items={[
-                    { label: "Revenue", value: money(latest.revenue) },
-                    { label: "Margin", value: money(latest.margin) },
-                    { label: "Margin rate", value: marginRate !== null ? `${marginRate.toFixed(1)}%` : "—" },
-                    { label: "Revenue Δ", value: delta(data.revenue.change_pct) },
-                    { label: "Margin rate Δ", value: delta(data.gross_margin_pct.change_pct, " pts") },
-                  ]} />
-                ) })()}
-                <div className="chart-frame chart-frame-compact"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data.trend}><defs><linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2995ff" stopOpacity={.25} /><stop offset="1" stopColor="#2995ff" stopOpacity={0} /></linearGradient><linearGradient id="marginFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8b5cf6" stopOpacity={.2} /><stop offset="1" stopColor="#8b5cf6" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="#e5e5e7" vertical={false} /><XAxis dataKey="period" tickFormatter={formatPeriod} tickLine={false} axisLine={false} tick={{ fill: "#85868b", fontSize: 12 }} /><YAxis hide /><Tooltip formatter={(v, n) => [money(Number(v)), n]} labelFormatter={(l) => formatPeriod(String(l))} /><Legend verticalAlign="top" height={24} wrapperStyle={{ fontSize: 12 }} /><Area type="monotone" name="Revenue" dataKey="revenue" stroke="#2995ff" strokeWidth={3} fill="url(#revenueFill)" /><Area type="monotone" name="Margin" dataKey="margin" stroke="#8b5cf6" strokeWidth={3} fill="url(#marginFill)" /></AreaChart></ResponsiveContainer></div>
+              <SectionCard className="dash-area-bridge" icon={TrendingUp} title="Performance bridge" description="Current vs. prior period for revenue and margin, without an overlapping line chart.">
+                <PerformanceBridge overview={data} />
+              </SectionCard>
+
+              <SectionCard className="dash-area-actions" icon={ListChecks} title="Executive action queue" description="Where to focus next, generated from the data already on this dashboard.">
+                <ExecutiveActionQueue actions={actionQueueItems.slice(0, 4)} />
               </SectionCard>
 
               <SectionCard className="dash-area-matrix" icon={Target} title="Returns priority map" description="Combines margin lost, return rate, and return volume to show where to act first.">
@@ -1083,15 +1241,6 @@ export default function Page() {
 
               <SectionCard className="dash-area-leakage" icon={TrendingDown} title="Returns leakage snapshot" description="Top categories losing margin to returns.">
                 {!leakageRows ? <div className="muted small">Loading leakage data&hellip;</div> : leakageRows.length === 0 ? <div className="muted small">No leakage data available.</div> : <ReturnsLeakageSnapshot rows={leakageRows} />}
-              </SectionCard>
-              <SectionCard className="dash-area-confidence" icon={ShieldCheck} title="Data confidence" description="Live source status for this tab.">
-                <div className="confidence-rows">
-                  <div className="confidence-row"><span className="muted small">Source</span><Badge tone={data.source_health.status === "healthy" ? "accent" : "warning"}>{data.source_health.status}</Badge></div>
-                  <div className="confidence-row"><span className="muted small">Certification</span><span>{data.metric_context.certification_status}</span></div>
-                  <div className="confidence-row"><span className="muted small">Reporting grain</span><span>{data.metric_context.reporting_grain}</span></div>
-                  <div className="confidence-row"><span className="muted small">Active filters</span><span>{activeFilterCount > 0 ? `${activeFilterCount} applied` : "None"}</span></div>
-                </div>
-                {data.source_health.warning && <div className="health-warning">{data.source_health.warning}</div>}
               </SectionCard>
 
               <SectionCard
@@ -1125,28 +1274,25 @@ export default function Page() {
                 description="Top 10 regions by revenue, share of the total shown region-to-region."
                 action={stateRows && <button className="button" onClick={() => downloadCsv("region_breakdown.csv", stateRows)}><Download size={14} />CSV</button>}
               >
-                {!rankedStateRows ? <div className="muted small">Loading region breakdown&hellip;</div> : rankedStateRows.length === 0 ? <div className="muted small">No region data in this window.</div> : (() => {
-                  const totalRevenue = rankedStateRows.reduce((sum, s) => sum + s.revenue, 0);
-                  const topRegion = rankedStateRows[0];
-                  const top3Share = totalRevenue ? (rankedStateRows.slice(0, 3).reduce((sum, s) => sum + s.revenue, 0) / totalRevenue) * 100 : 0;
-                  return <>
+                {!rankedStateRows ? <div className="muted small">Loading region breakdown&hellip;</div> : rankedStateRows.length === 0 ? <div className="muted small">No region data in this window.</div> : (
+                  <>
                     <MiniStatStrip items={[
-                      { label: "Top region", value: topRegion.state_abbrev || topRegion.state },
-                      { label: "Top revenue", value: money(topRegion.revenue) },
-                      { label: "Top 3 share", value: `${top3Share.toFixed(0)}%` },
+                      { label: "Top region", value: topRegionRow!.state_abbrev || topRegionRow!.state },
+                      { label: "Top revenue", value: money(topRegionRow!.revenue) },
+                      { label: "Top 3 share", value: `${top3RegionShare.toFixed(0)}%` },
                       { label: "Regions shown", value: String(rankedStateRows.length) },
                     ]} />
-                    <p className="dash-insight-line muted small">Top 3 regions contribute {top3Share.toFixed(0)}% of displayed regional revenue, led by {topRegion.state}.</p>
+                    <p className="dash-insight-line muted small">Top 3 regions contribute {top3RegionShare.toFixed(0)}% of displayed regional revenue, led by {topRegionRow!.state}.</p>
                     <div className="state-bars">{rankedStateRows.map((s) => (
                       <div key={s.state} className="state-bar-row">
                         <span className="state-bar-label">{s.state_abbrev || s.state}</span>
                         <span className="state-bar-track"><span className="state-bar-fill" style={{ width: `${maxStateRevenue ? (s.revenue / maxStateRevenue) * 100 : 0}%` }} /></span>
                         <span className="state-bar-value muted small">{money(s.revenue)}</span>
-                        <span className="state-bar-share muted small">{totalRevenue ? `${((s.revenue / totalRevenue) * 100).toFixed(0)}%` : ""}</span>
+                        <span className="state-bar-share muted small">{regionTotalRevenue ? `${((s.revenue / regionTotalRevenue) * 100).toFixed(0)}%` : ""}</span>
                       </div>
                     ))}</div>
-                  </>;
-                })()}
+                  </>
+                )}
               </SectionCard>
 
               <SectionCard
@@ -1156,21 +1302,34 @@ export default function Page() {
                 description="Share of order items from paid channels (Facebook, Display, Email) vs. organic/direct (Search, Organic)."
                 action={channelMonths && channelMonths.length > 0 && <button className="button" onClick={() => downloadCsv("channel_mix.csv", channelMonths)}><Download size={14} />CSV</button>}
               >
-                {!channelMonths || channelMonths.length === 0 ? <div className="muted small">Loading channel mix&hellip;</div> : (() => {
-                  const latestMonth = channelMonths[channelMonths.length - 1];
-                  const paidPct = latestMonth.paid_share_pct;
-                  return <>
+                {!latestChannelMonth ? <div className="muted small">Loading channel mix&hellip;</div> : (
+                  <>
                     <MiniStatStrip items={[
-                      { label: "Paid", value: `${paidPct.toFixed(1)}%` },
-                      { label: "Organic", value: `${(100 - paidPct).toFixed(1)}%` },
-                      { label: "Latest denominator", value: `${number(latestMonth.total)} items` },
-                      { label: "Dominant source", value: paidPct >= 50 ? "Paid" : "Organic" },
+                      { label: "Paid", value: `${latestChannelMonth.paid_share_pct.toFixed(1)}%` },
+                      { label: "Organic", value: `${(100 - latestChannelMonth.paid_share_pct).toFixed(1)}%` },
+                      { label: "Latest denominator", value: `${number(latestChannelMonth.total)} items` },
+                      { label: "Dominant source", value: latestChannelMonth.paid_share_pct >= 50 ? "Paid" : "Organic" },
                     ]} />
-                    <ChannelChart months={channelMonths} compact />
-                  </>;
-                })()}
+                    <ChannelChart months={channelMonths!} compact />
+                  </>
+                )}
               </SectionCard>
             </div></section>
+
+            {/* Data Confidence moves out of the prime right column into a
+                quiet full-width footer strip -- it's trust metadata, not a
+                business insight, so it shouldn't compete with the cards
+                above for premium space. */}
+            <section className="dash-confidence-strip">
+              <div className="confidence-strip-head"><ShieldCheck size={14} /><span>Data confidence</span></div>
+              <div className="confidence-strip-row">
+                <span className="confidence-strip-item"><span className="muted small">Source</span><Badge tone={data.source_health.status === "healthy" ? "accent" : "warning"}>{data.source_health.status}</Badge></span>
+                <span className="confidence-strip-item"><span className="muted small">Certification</span><span>{data.metric_context.certification_status}</span></span>
+                <span className="confidence-strip-item"><span className="muted small">Reporting grain</span><span>{data.metric_context.reporting_grain}</span></span>
+                <span className="confidence-strip-item"><span className="muted small">Active filters</span><span>{activeFilterCount > 0 ? `${activeFilterCount} applied` : "None"}</span></span>
+              </div>
+              {data.source_health.warning && <div className="health-warning">{data.source_health.warning}</div>}
+            </section>
           </div>}
 
           {activeView === "performance" && <>
