@@ -60,6 +60,11 @@ button, input, textarea, select { font: inherit; }
 .workspace { display: flex; flex-direction: column; gap: 24px; min-width: 0; width: 100%; max-width: 1440px; }
 .dashboard-surface { display: flex; flex-direction: column; gap: 28px; width: 100%; }
 
+/* Anchored sidebar links (#overview, #sql-review, etc.) land flush against
+   the viewport top by default; give anchored sections a little breathing
+   room instead of touching the edge. */
+[id] { scroll-margin-top: 24px; }
+
 .section-title {
   font-size: 13px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase;
   color: var(--muted-foreground); margin: 0 0 4px;
@@ -102,15 +107,15 @@ button, input, textarea, select { font: inherit; }
   box-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 1px 3px rgba(16, 24, 40, .06);
 }
 .stat-label { font-size: 14px; color: var(--muted-foreground); }
-.stat-line { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 10px; }
-.stat-value { font-size: 40px; font-weight: 650; }
+.stat-line { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; margin-top: 10px; min-width: 0; }
+.stat-value { font-size: 40px; font-weight: 650; line-height: 1.1; max-width: 100%; overflow-wrap: anywhere; }
 .delta { color: var(--accent); font-size: 13px; }
 
 .main-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, .75fr); gap: 24px; }
 .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .card h2 { font-size: 24px; margin: 0 0 3px; }
 .small { font-size: 13px; }
-.chart-frame { height: 245px; margin: 8px -5px -2px; }
+.chart-frame { height: 280px; margin: 16px 0 0; }
 .insight { display: flex; gap: 10px; line-height: 1.5; }
 .insight svg { color: var(--accent); flex: 0 0 auto; }
 .evidence { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--border); margin-top: 20px; padding-top: 14px; }
