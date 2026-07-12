@@ -727,6 +727,98 @@ function InsightTiles({ items }: { items: { label: string; name: string; value: 
   );
 }
 
+function median(nums: number[]) {
+  if (!nums.length) return 0;
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+type MatrixQuadrant = "Act Now" | "Margin Recovery" | "Watchlist" | "Stable";
+const MATRIX_QUADRANTS: { key: MatrixQuadrant; cls: string }[] = [
+  { key: "Act Now", cls: "matrix-act-now" },
+  { key: "Margin Recovery", cls: "matrix-margin-recovery" },
+  { key: "Watchlist", cls: "matrix-watchlist" },
+  { key: "Stable", cls: "matrix-stable" },
+];
+
+// Dashboard-only: Returns Opportunity Matrix -- a bubble scatter (x = return
+// rate, y = margin lost to returns, bubble size = returned items) that
+// classifies each plotted category into an action quadrant against the
+// median of the plotted set. Built entirely from the same rows already
+// powering the Returns Leakage Snapshot card (leakageRows state, fetched
+// from the existing /returns-leakage endpoint) -- no new endpoint, no
+// invented numbers. Hand-rolled SVG rather than Recharts so it never
+// touches ChannelChart/ChannelSnapshot or any other component AskEvidence
+// (Ask Loupe) reuses.
+function ReturnsOpportunityMatrix({ rows }: { rows: LeakageRow[] }) {
+  const valid = rows.filter((r) =>
+    Number.isFinite(r.margin_lost_to_returns) && Number.isFinite(r.return_rate_pct) && Number.isFinite(r.returned_items)
+  );
+  if (!valid.length) return <p className="muted small">Returns opportunity matrix needs returns leakage data.</p>;
+
+  const plotted = [...valid].sort((a, b) => b.margin_lost_to_returns - a.margin_lost_to_returns).slice(0, 12);
+  const medianReturnRate = median(plotted.map((r) => r.return_rate_pct));
+  const medianMarginLost = median(plotted.map((r) => r.margin_lost_to_returns));
+
+  const points = plotted.map((r) => {
+    const highMargin = r.margin_lost_to_returns >= medianMarginLost;
+    const highReturn = r.return_rate_pct >= medianReturnRate;
+    const quadrant: MatrixQuadrant = highMargin && highReturn ? "Act Now" : highMargin ? "Margin Recovery" : highReturn ? "Watchlist" : "Stable";
+    return { ...r, quadrant };
+  });
+  const quadrantCls = (q: MatrixQuadrant) => MATRIX_QUADRANTS.find((m) => m.key === q)!.cls;
+
+  const labelSet = new Set(plotted.slice(0, 5).map((r) => r.category));
+  const actNow = points.filter((p) => p.quadrant === "Act Now").sort((a, b) => b.margin_lost_to_returns - a.margin_lost_to_returns);
+  let insight: string;
+  if (actNow.length >= 2) {
+    const extra = actNow.length > 2 ? ` (plus ${actNow.length - 2} more)` : "";
+    insight = `${actNow[0].category} and ${actNow[1].category} sit in the highest-priority zone${extra} because they combine high dollar leakage with meaningful return activity.`;
+  } else if (actNow.length === 1) {
+    insight = `${actNow[0].category} sits in the highest-priority zone because it combines high dollar leakage with meaningful return activity.`;
+  } else {
+    insight = `${plotted[0].category} carries the largest returns-driven margin loss among plotted categories, though none currently cross both the return-rate and margin-lost thresholds.`;
+  }
+
+  // Fixed viewBox scaled by the parent's CSS width -- no charting library.
+  const W = 640, H = 300, ML = 54, MR = 16, MT = 14, MB = 32;
+  const plotW = W - ML - MR, plotH = H - MT - MB;
+  const maxReturnRate = (Math.max(...points.map((p) => p.return_rate_pct), medianReturnRate) * 1.15) || 1;
+  const maxMarginLost = (Math.max(...points.map((p) => p.margin_lost_to_returns), medianMarginLost) * 1.15) || 1;
+  const maxReturnedItems = Math.max(...points.map((p) => p.returned_items), 1);
+  const xScale = (v: number) => ML + (v / maxReturnRate) * plotW;
+  const yScale = (v: number) => MT + plotH - (v / maxMarginLost) * plotH;
+  const rScale = (v: number) => 6 + 20 * Math.sqrt(Math.max(v, 0) / maxReturnedItems);
+
+  return (
+    <>
+      <p className="dash-insight-line">{insight}</p>
+      <div className="matrix-legend">
+        {MATRIX_QUADRANTS.map((q) => <span className={`matrix-legend-item ${q.cls}`} key={q.key}><i className="matrix-legend-dot" />{q.key}</span>)}
+      </div>
+      <svg className="matrix-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Returns opportunity matrix: return rate vs. margin lost, sized by returned items">
+        <line x1={xScale(medianReturnRate)} y1={MT} x2={xScale(medianReturnRate)} y2={MT + plotH} className="matrix-divider" />
+        <line x1={ML} y1={yScale(medianMarginLost)} x2={ML + plotW} y2={yScale(medianMarginLost)} className="matrix-divider" />
+        <line x1={ML} y1={MT + plotH} x2={ML + plotW} y2={MT + plotH} className="matrix-axis" />
+        <line x1={ML} y1={MT} x2={ML} y2={MT + plotH} className="matrix-axis" />
+        <text x={ML + plotW / 2} y={H - 6} className="matrix-axis-label" textAnchor="middle">Return rate</text>
+        <text x={14} y={MT + plotH / 2} className="matrix-axis-label" textAnchor="middle" transform={`rotate(-90 14 ${MT + plotH / 2})`}>Margin lost</text>
+        {points.map((p) => (
+          <g key={p.category} className={`matrix-point ${quadrantCls(p.quadrant)}`}>
+            <circle cx={xScale(p.return_rate_pct)} cy={yScale(p.margin_lost_to_returns)} r={rScale(p.returned_items)} className="matrix-bubble">
+              <title>{`${p.category}: ${money(p.margin_lost_to_returns)} margin lost, ${p.return_rate_pct.toFixed(1)}% return rate, ${number(p.returned_items)} of ${number(p.total_items)} items returned -- ${p.quadrant}`}</title>
+            </circle>
+            {labelSet.has(p.category) && (
+              <text x={xScale(p.return_rate_pct)} y={yScale(p.margin_lost_to_returns) - rScale(p.returned_items) - 5} className="matrix-bubble-label" textAnchor="middle">{p.category}</text>
+            )}
+          </g>
+        ))}
+      </svg>
+    </>
+  );
+}
+
 // Dashboard-only: Category Leaderboard as a dense table/list hybrid (rank,
 // category + mini bar for the active sort metric, revenue, margin, return
 // rate, items) instead of a bare chart -- reads as a ranked business card.
@@ -990,6 +1082,10 @@ export default function Page() {
                   ]} />
                 ) })()}
                 <div className="chart-frame chart-frame-compact"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data.trend}><defs><linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2995ff" stopOpacity={.25} /><stop offset="1" stopColor="#2995ff" stopOpacity={0} /></linearGradient><linearGradient id="marginFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8b5cf6" stopOpacity={.2} /><stop offset="1" stopColor="#8b5cf6" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="#e5e5e7" vertical={false} /><XAxis dataKey="period" tickFormatter={formatPeriod} tickLine={false} axisLine={false} tick={{ fill: "#85868b", fontSize: 12 }} /><YAxis hide /><Tooltip formatter={(v, n) => [money(Number(v)), n]} labelFormatter={(l) => formatPeriod(String(l))} /><Legend verticalAlign="top" height={24} wrapperStyle={{ fontSize: 12 }} /><Area type="monotone" name="Revenue" dataKey="revenue" stroke="#2995ff" strokeWidth={3} fill="url(#revenueFill)" /><Area type="monotone" name="Margin" dataKey="margin" stroke="#8b5cf6" strokeWidth={3} fill="url(#marginFill)" /></AreaChart></ResponsiveContainer></div>
+              </SectionCard>
+
+              <SectionCard className="dash-area-matrix" icon={Target} title="Returns opportunity matrix" description="Return rate, margin lost, and return volume plotted together to show which categories need action first.">
+                {!leakageRows ? <div className="muted small">Loading leakage data&hellip;</div> : <ReturnsOpportunityMatrix rows={leakageRows} />}
               </SectionCard>
 
               <SectionCard className="dash-area-leakage" icon={TrendingDown} title="Returns leakage snapshot" description="Top categories losing margin to returns.">
