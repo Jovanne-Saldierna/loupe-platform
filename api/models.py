@@ -54,3 +54,55 @@ class LoupeOverviewResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str = Field(description="Safe user-facing error without raw infrastructure details")
+
+
+class CatalogMetric(BaseModel):
+    name: str
+    version: str
+    certification_status: str
+    measurement_grain: str
+
+
+class GovernanceCatalogResponse(BaseModel):
+    metrics: list[CatalogMetric]
+
+
+class GovernanceReviewRequest(BaseModel):
+    sql: str = Field(min_length=1, max_length=50_000)
+    metric_name: str = Field(min_length=1, max_length=100)
+
+
+class ReviewFinding(BaseModel):
+    severity: str
+    category: str
+    message: str
+
+
+class TrustFactor(BaseModel):
+    name: str
+    points: int
+    reason: str
+
+
+class ContractAlignment(BaseModel):
+    contract: str
+    expected: str
+    observed: str
+    status: str
+
+
+class GovernanceReviewResponse(BaseModel):
+    metric: CatalogMetric
+    review_score: int
+    summary: str
+    findings: list[ReviewFinding]
+    referenced_tables: list[str]
+    recommended_next_steps: list[str]
+    trust_score: int
+    trust_band: str
+    scoring_version: str
+    trust_factors: list[TrustFactor]
+    override_reason: Optional[str]
+    source_health: str
+    active_incident_ids: list[str]
+    alignment: list[ContractAlignment]

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes.loupe import router as loupe_router
+from api.routes.governance import router as governance_router
 
 app = FastAPI(
     title="Loupe Platform API",
@@ -23,6 +24,7 @@ app.add_middleware(
 )
 
 app.include_router(loupe_router)
+app.include_router(governance_router)
 
 
 @app.get("/health")
