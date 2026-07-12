@@ -1,72 +1,86 @@
-.product { width: min(736px, calc(100% - 24px)); }
-.app-shell { grid-template-columns: 165px minmax(0, 1fr); gap: 18px; }
-.page-header > div:first-child { min-width: 0; }
-.page-header .actions { flex-wrap: nowrap; }
-.nav-item:disabled { cursor: default; opacity: 1; }
+/* Governance (Violet Ledger) */
 .product-governance {
   --accent: #35b866;
   --accent-soft: #e9f8ee;
 }
 .product-governance .button.primary { background: #202126; color: #fff; border-color: #202126; }
-.product-loupe .button.primary { background: #202126; color: #fff; border-color: #202126; }
-.ask-row { display: flex; gap: 8px; }.ask-row input { min-width: 0; flex: 1; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: #fff; }.answer { display: flex; gap: 9px; padding: 12px; margin-top: 10px; background: var(--accent-soft); border-radius: 10px; line-height: 1.5; }.answer svg { color: var(--accent); flex: 0 0 auto; }
-.select { border: 1px solid var(--border); background: #fff; border-radius: 10px; padding: 8px 10px; color: #202126; }
-.product-governance .select { width: 160px; max-width: 160px; }
-.product-governance .page-header h1 { font-size: 20px; }
-.review-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(220px, .65fr); gap: 14px; }
-.code-input { width: 100%; min-height: 210px; resize: vertical; border: 0; outline: 0; border-radius: 12px; background: #dedee0; padding: 16px; color: #202126; font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.ask-row { display: flex; gap: 8px; }
+.ask-row input { min-width: 0; flex: 1; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: #fff; }
+.answer { display: flex; gap: 9px; padding: 12px; margin-top: 10px; background: var(--accent-soft); border-radius: 10px; line-height: 1.5; }
+.answer svg { color: var(--accent); flex: 0 0 auto; }
+
+/* Two-column SQL review workspace: submitted query gets the wide column,
+   the review/result panel gets a comfortable but not squeezed sidebar. */
+.review-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(340px, .9fr); gap: 24px; }
+.code-input {
+  width: 100%; min-height: 340px; resize: vertical; border: 1px solid var(--border); outline: 0;
+  border-radius: 16px; background: var(--muted); padding: 20px; color: #202126;
+  font: 15px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
 .score { --score: 0%; position: relative; display: grid; place-items: center; width: 76px; height: 76px; border-radius: 50%; background: conic-gradient(var(--accent) var(--score), #ddd var(--score)); }
 .score::after { content: ""; position: absolute; inset: 8px; border-radius: 50%; background: var(--card); }
 .score span { position: relative; z-index: 1; font-size: 23px; font-weight: 650; }
 .finding { display: flex; gap: 9px; padding: 11px 0; border-bottom: 1px solid var(--border); }
 .finding svg { color: var(--accent); flex: 0 0 auto; }
 .finding strong { font-size: 14px; }
-.empty-review { min-height: 190px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; }
 .data-table { border-collapse: collapse; width: 100%; font-size: 14px; }
-.data-table th,.data-table td { text-align: left; padding: 11px 9px; border-bottom: 1px solid var(--border); }
+.data-table th, .data-table td { text-align: left; padding: 11px 9px; border-bottom: 1px solid var(--border); }
 .data-table th { color: var(--muted-foreground); font-weight: 500; }
 .table-wrap { overflow-x: auto; }
-@media (max-width: 820px) { .review-grid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .review-layout { grid-template-columns: 1fr; } }
 
+/* Loupe (Signal Intelligence) */
+.product-loupe .button.primary { background: #202126; color: #fff; border-color: #202126; }
+.insight-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, .85fr); gap: 24px; }
+@media (max-width: 900px) { .insight-grid { grid-template-columns: 1fr; } }
+
+/* Triage (Midnight Command): darker canvas, visibly lighter cards for
+   contrast, same purple accent. .product carries this background full
+   bleed because .product-triage only overrides the --background token
+   that the shared .product rule (in styles.css) already reads. */
 .product-triage {
-  --background: #2d2e31;
-  --foreground: #f5f5f6;
-  --muted: #444549;
-  --muted-foreground: #c0c0c4;
-  --card: #424347;
-  --border: #56575c;
+  --background: #1c1d20;
+  --foreground: #f2f2f4;
+  --muted: #29292d;
+  --muted-foreground: #a8a9ae;
+  --card: #28292d;
+  --border: #3a3b40;
   --accent: #9b77f3;
-  --accent-soft: #413d50;
-  background: var(--background);
-  color: var(--foreground);
-  padding: 16px;
-  border-radius: 16px;
+  --accent-soft: #332c47;
 }
-
-.product-triage .app-shell { min-height: 600px; }
-.product-triage .platform-link:not(.active),
 .product-triage .button { background: #fff; color: #202126; }
 .product-triage .unavailable { background: #3b3730; border-color: #74664b; color: #fff; }
 .product-triage .unavailable p { color: #d8cfbe; }
-.product-triage .skeleton { background: linear-gradient(90deg,#414247,#505157,#414247); background-size: 200% 100%; }
-.product-triage .card { border-color: #4c4d52; }
+.product-triage .skeleton { background: linear-gradient(90deg, #303136, #3a3b40, #303136); }
 .product-triage .badge-accent { color: #55a9ff; background: #eef7ff; }
 .product-triage .badge-warning { color: #ffe0a3; background: #544a38; }
 .product-triage .delta { color: var(--accent); }
-.product-triage .data-table th,.product-triage .data-table td { border-color: var(--border); }
+
+/* Two-column operational area: source health + incident timeline. */
+.triage-layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(320px, 1fr); gap: 24px; }
+@media (max-width: 900px) { .triage-layout { grid-template-columns: 1fr; } }
+
 .health-bars { display: flex; flex-direction: column; gap: 13px; padding: 8px 0; }
-.health-row { display: grid; grid-template-columns: 110px minmax(80px,1fr) 75px; align-items: center; gap: 12px; border: 0; background: transparent; color: inherit; padding: 7px 0; cursor: pointer; text-align: left; }
-.health-name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
-.health-track { height: 11px; border-radius: 999px; background: #595a60; overflow: hidden; }
+.health-row {
+  display: grid; grid-template-columns: minmax(140px, 240px) minmax(120px, 1fr) 90px;
+  align-items: center; gap: 12px; border: 0; background: transparent; color: inherit;
+  padding: 7px 0; cursor: pointer; text-align: left;
+}
+.health-name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health-track { height: 11px; border-radius: 999px; background: #3a3b40; overflow: hidden; }
 .health-fill { height: 100%; display: block; border-radius: inherit; }
-.health-healthy { background: #7d65ba; }.health-degraded { background: #d8a64e; }.health-critical { background: #ee6a6a; }.health-unknown { background: #898a90; }
-.status-dot { font-size: 12px; text-transform: capitalize; }.status-healthy { color: #b89cff; }.status-degraded { color: #ffd181; }.status-critical { color: #ff9a9a; }.status-unknown { color: #c0c0c4; }
+.health-healthy { background: #7d65ba; } .health-degraded { background: #d8a64e; } .health-critical { background: #ee6a6a; } .health-unknown { background: #898a90; }
+.status-dot { font-size: 12px; text-transform: capitalize; white-space: nowrap; }
+.status-healthy { color: #b89cff; } .status-degraded { color: #ffd181; } .status-critical { color: #ff9a9a; } .status-unknown { color: #c0c0c4; }
 .timeline { display: flex; flex-direction: column; gap: 17px; margin: 8px 0 18px; }
-.timeline-step { display: grid; grid-template-columns: 20px 1fr; gap: 9px; }.timeline-step svg { color: var(--accent); margin-top: 2px; }
+.timeline-step { display: grid; grid-template-columns: 20px 1fr; gap: 9px; }
+.timeline-step svg { color: var(--accent); margin-top: 2px; }
 .incident-actions { display: flex; gap: 7px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 13px; }
-.notes { width: 100%; min-height: 70px; resize: vertical; margin-top: 9px; border: 1px solid var(--border); border-radius: 9px; background: #38393d; color: #fff; padding: 9px; }
-.incident-table tbody tr { cursor: pointer; }.incident-table tbody tr:hover,.incident-table tbody tr.selected { background: #4a4852; }
-.severity { text-transform: capitalize; font-size: 12px; font-weight: 650; }.severity-high { color: #ff9a9a; }.severity-medium { color: #ffd181; }.severity-low { color: #b89cff; }
+.notes { width: 100%; min-height: 70px; resize: vertical; margin-top: 9px; border: 1px solid var(--border); border-radius: 9px; background: var(--muted); color: var(--foreground); padding: 9px; }
+.incident-table tbody tr { cursor: pointer; }
+.incident-table tbody tr:hover, .incident-table tbody tr.selected { background: var(--accent-soft); }
+.severity { text-transform: capitalize; font-size: 12px; font-weight: 650; }
+.severity-high { color: #ff9a9a; } .severity-medium { color: #ffd181; } .severity-low { color: #b89cff; }
 .queue-empty { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 90px; color: var(--muted-foreground); }
-@media (max-width: 560px) { .health-row { grid-template-columns: 85px 1fr; }.status-dot { grid-column: 2; } }
-@media (max-width: 820px) { .app-shell { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .health-row { grid-template-columns: minmax(100px, 140px) 1fr; } .status-dot { grid-column: 2; } }
