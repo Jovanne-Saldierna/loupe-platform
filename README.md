@@ -4,6 +4,12 @@ An AI-assisted analytics operating layer that connects business performance, met
 
 Dashboards show what changed. Loupe AI Analytics Platform helps a data team decide whether the change is real, whether the metric behind it is trustworthy, what broke underneath it, and what to do next.
 
+## Origin: Streamlit Loupe OG
+
+Loupe began as a Streamlit AI commerce analytics agent focused on one workflow: helping users ask plain-English questions about e-commerce performance and receive grounded answers from BigQuery-backed data.
+
+That original prototype proved the assistant pattern. The current Loupe AI Analytics Platform expands the idea into a broader operating layer for business performance, metric governance, and data quality triage.
+
 ## Why this exists
 
 Modern data teams do not fail because they lack charts. They fail at the handoffs between three questions leadership actually asks:
@@ -240,3 +246,5 @@ Triage maps source tables to governed metrics and downstream assets, showing whi
 - [Metrics and trust contracts](docs/contracts.md)
 - [Deployment (Cloud Run + Vercel)](docs/DEPLOYMENT.md)
 - [Development and operations](docs/development.md)
+
+
