@@ -1182,6 +1182,34 @@ export default function Page() {
     window.addEventListener("pointerup", onUp);
   }
 
+  // Horizontal counterpart: same affordance, but widens the whole workspace
+  // (not just the response body) via a right-edge handle, so the wider Brief
+  // view / evidence tables get real room in a screenshot. Default is unset
+  // (compact 820px-capped panel, same as before); clamped between a readable
+  // minimum and either a fixed ceiling or the viewport, whichever is smaller.
+  const chatShellRef = useRef<HTMLDivElement>(null);
+  const [chatPanelWidth, setChatPanelWidth] = useState<number | null>(null);
+  const CHAT_MIN_WIDTH = 640;
+  const CHAT_MAX_WIDTH = 1100;
+  function handleChatWidthResizeStart(e: ReactPointerEvent<HTMLDivElement>) {
+    const el = chatShellRef.current;
+    if (!el) return;
+    const startX = e.clientX;
+    const startWidth = el.getBoundingClientRect().width;
+    const maxWidth = Math.min(CHAT_MAX_WIDTH, window.innerWidth - 64);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    function onMove(ev: PointerEvent) {
+      const next = Math.min(maxWidth, Math.max(CHAT_MIN_WIDTH, Math.round(startWidth + (ev.clientX - startX))));
+      setChatPanelWidth(next);
+    }
+    function onUp() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
   useEffect(() => {
     const q = new URLSearchParams({ start_date: startDate, end_date: endDate });
     selectedCategories.forEach((c) => q.append("categories", c));
@@ -1507,7 +1535,13 @@ export default function Page() {
             <section><QuickAsk subtitle="Ask about margin, returns, or scenario impact." disabled={asking} onAsk={askQuestion} prompts={["What if we cut the return rate in Swim by 5 points?", "Which categories are losing the most money to returns?", "How is Swim performing?"]} /></section>
           </>}
 
-          {activeView === "ask" && <section className="chat-panel-wrap"><div className="chat-panel">
+          {activeView === "ask" && <section className="chat-panel-wrap">
+          <div
+            ref={chatShellRef}
+            className="chat-panel-shell"
+            style={chatPanelWidth !== null ? { width: chatPanelWidth, maxWidth: chatPanelWidth } : undefined}
+          >
+            <div className="chat-panel">
             <div className="chat-panel-header">
               <div className="chat-panel-title"><Sparkles size={16} />Ask Loupe</div>
               <div className="chat-panel-status muted small">
@@ -1543,7 +1577,13 @@ export default function Page() {
                       const briefVisible = isLatest && !!briefOpen[m.id];
                       return (
                         <>
-                          <div className="chat-bubble chat-bubble-assistant"><Sparkles size={15} /><span>{insight.headline}</span></div>
+                          {/* When the brief is open, the plain headline bubble is
+                              dropped from here and re-shown -- smaller and muted --
+                              inside the "Model narrative" section below the brief,
+                              so the Executive Brief is what the eye lands on first. */}
+                          {!briefVisible && (
+                            <div className="chat-bubble chat-bubble-assistant"><Sparkles size={15} /><div className="chat-bubble-text">{renderMarkdown(insight.headline)}</div></div>
+                          )}
                           {/* Brief view is scoped to the latest response only -- a
                               compact, screenshot-friendly summary of the answer
                               directly above it, never a replacement for it. */}
@@ -1561,7 +1601,15 @@ export default function Page() {
                           {briefVisible && (
                             <AskBriefCard question={m.question} response={resp} insight={insight} onCopyAnswer={() => navigator.clipboard.writeText(resp.answer)} />
                           )}
-                          <AskInsightBody response={resp} insight={insight} />
+                          {briefVisible ? (
+                            <div className="ask-model-narrative">
+                              <div className="ask-model-narrative-label"><Sparkles size={11} />Model narrative <span className="muted small">&middot; full answer</span></div>
+                              <div className="chat-bubble chat-bubble-assistant chat-bubble-assistant-muted"><Sparkles size={13} /><div className="chat-bubble-text">{renderMarkdown(insight.headline)}</div></div>
+                              <AskInsightBody response={resp} insight={insight} />
+                            </div>
+                          ) : (
+                            <AskInsightBody response={resp} insight={insight} />
+                          )}
                         </>
                       );
                     })()}
@@ -1590,7 +1638,19 @@ export default function Page() {
                 <button type="submit" className="chat-send" disabled={asking || !question.trim()} aria-label="Send question"><ArrowRight size={16} /></button>
               </form>
             </div>
-          </div></section>}
+            </div>
+            <div
+              className="chat-panel-width-handle"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Drag to resize answer workspace"
+              title="Drag to resize answer workspace"
+              onPointerDown={handleChatWidthResizeStart}
+            >
+              <span className="chat-panel-width-grip" />
+            </div>
+          </div>
+          </section>}
         </>}
       </div>
     </AppShell>
