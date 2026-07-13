@@ -180,6 +180,26 @@ export function MiniStatusCard({ icon: Icon, label, value, deltaLabel, status, t
   );
 }
 
+// Generic compact fact pairs (label + value, optional tone + helper text) --
+// for showing a handful of related raw facts side by side (e.g. an observed
+// vs. expected reading, or any other small set of named values a calling app
+// already has). Not tied to any one app's domain; tone reuses the shared
+// up/down/neutral vocabulary and is entirely optional.
+export function FactPairGrid({ items }: { items: { label: string; value: string; tone?: CardTone; helper?: string }[] }) {
+  if (!items.length) return null;
+  return (
+    <div className="fact-pair-grid">
+      {items.map((it) => (
+        <div className="fact-pair" key={it.label}>
+          <span className="fact-pair-label">{it.label}</span>
+          <span className={`fact-pair-value${it.tone ? ` fact-pair-value-${it.tone}` : ""}`}>{it.value}</span>
+          {it.helper && <span className="fact-pair-helper muted small">{it.helper}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Generic "why this score" breakdown: a factor's name/label, its point
 // contribution, and a short reason -- for any calling app that computes a
 // score from named factors and wants to explain the math instead of just

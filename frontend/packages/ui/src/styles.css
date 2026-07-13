@@ -842,6 +842,27 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .region-row-fill { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
 .region-row-value { text-align: right; font-size: 12.5px; font-weight: 650; white-space: nowrap; }
 
+/* --- Table health row: name + active incident count ------------------------
+   Stacks the table name and its active-incident count inside the same first
+   grid cell as before (health-row's 3-column grid template lives in
+   themes.css and is left untouched) so the count reads underneath the name
+   without changing row layout, status-dot, fill, or click behavior. */
+.health-name-wrap { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.health-count { font-size: 11px; color: var(--muted-foreground); }
+
+/* --- Fact pair grid --------------------------------------------------------
+   Generic label/value fact rows (optionally toned, with helper text) for a
+   handful of related raw facts shown side by side -- e.g. an observed vs.
+   expected reading. Not tied to any one app's domain. */
+.fact-pair-grid { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; }
+.fact-pair { display: flex; flex-direction: column; gap: 2px; min-width: 90px; }
+.fact-pair-label { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; color: var(--muted-foreground); }
+.fact-pair-value { font-size: 15px; font-weight: 650; }
+.fact-pair-value-up { color: #1b7a43; }
+.fact-pair-value-down { color: #c0362c; }
+.fact-pair-value-neutral { color: var(--foreground); }
+.fact-pair-helper { margin-top: 1px; }
+
 /* --- Reasoning breakdown -------------------------------------------------
    Generic factor/points/reason rows for any score that wants to explain its
    own math (not tied to Governance's trust score specifically). */
