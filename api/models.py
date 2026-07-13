@@ -401,6 +401,45 @@ class TriagePlaybookResponse(BaseModel):
     model: Optional[str] = None
 
 
+class TriageSqlSandboxRequest(BaseModel):
+    """A user-submitted (or 'load in sandbox'-prefilled) debugging SQL
+    check the Playbook tab wants to run read-only against the warehouse.
+    `sql` is untrusted input -- see apps/data_quality_triage/sql_sandbox.py
+    for the deterministic (non-AI) safety validation applied before this
+    ever reaches BigQuery. `incident_id` and `check_title` are carried
+    through only for the client-side audit trail; the endpoint does not
+    look up or validate the incident itself."""
+
+    incident_id: str
+    sql: str = Field(min_length=1, max_length=10_000)
+    check_title: Optional[str] = None
+
+
+class TriageSqlSandboxResponse(BaseModel):
+    """Result of one sandbox execution. `status` distinguishes three
+    outcomes so the frontend never has to guess: "rejected" means the
+    deterministic safety validator refused the SQL before touching
+    BigQuery (see `error` for why); "error" means the SQL passed safety
+    but BigQuery itself failed to run it (bad table/column name, syntax
+    BigQuery caught that the lenient sqlglot parse didn't, etc.);
+    "success" means rows were actually returned. `rows`/`columns`/
+    `row_count` are only meaningfully populated on "success" -- callers
+    must not render a result table for "rejected"/"error"."""
+
+    status: Literal["success", "rejected", "error"]
+    columns: list[str] = Field(default_factory=list)
+    rows: list[dict[str, Any]] = Field(default_factory=list)
+    row_count: int = 0
+    # Best-effort BigQuery dry-run estimate; None whenever a dry run
+    # wasn't possible (e.g. against a test fake client) -- never guessed.
+    bytes_processed: Optional[int] = None
+    error: Optional[str] = None
+    # The actual cap enforced on this run (apps.data_quality_triage.
+    # sql_sandbox.MAX_ROWS), surfaced so the frontend can show it next to
+    # row_count rather than hardcoding the number itself.
+    row_limit: int = 0
+
+
 class IncidentTransitionRequest(BaseModel):
     target_status: Literal["acknowledged", "investigating", "mitigated", "resolved", "open"]
     expected_current_status: str

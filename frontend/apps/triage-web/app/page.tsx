@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertTriangle, BookOpen, CheckCircle2, CircleDot, Gauge, GitBranch, ListChecks, RefreshCw, Siren, TableProperties } from "lucide-react";
-import { AppShell, AskLoupePanel, AuditTrailList, Badge, ChipList, FactPairGrid, LineageChain, MiniStatStrip, PlaybookWorkflow, RecommendationList, SectionCard, Stat, Unavailable } from "@loupe/ui";
-import type { AuditTrailItem, HelperMessage, LineageChainItem } from "@loupe/ui";
+import { AppShell, AskLoupePanel, AuditTrailList, Badge, ChipList, FactPairGrid, LineageChain, MiniStatStrip, PlaybookWorkflow, RecommendationList, SectionCard, SqlSandbox, Stat, Unavailable } from "@loupe/ui";
+import type { AuditTrailItem, HelperMessage, LineageChainItem, PlaybookStepItem, SqlSandboxResult } from "@loupe/ui";
 
 type TableHealth={table_id:string;status:"healthy"|"degraded"|"critical"|"unknown";freshness_minutes:number|null;active_incident_count:number};
 type IncidentAuditEntry={step:string;description:string;timestamp:string|null;source:string|null};
@@ -29,6 +29,7 @@ export default function Page(){
   const [helperMessages,setHelperMessages]=useState<HelperMessage[]>([]); const [helperQuestion,setHelperQuestion]=useState(""); const [helperAsking,setHelperAsking]=useState(false);
   const nextHelperId=useRef(0);
   const [playbook,setPlaybook]=useState<Playbook|null>(null); const [playbookLoading,setPlaybookLoading]=useState(false); const [playbookError,setPlaybookError]=useState<string|null>(null);
+  const [sandboxSql,setSandboxSql]=useState(""); const [sandboxCheckTitle,setSandboxCheckTitle]=useState<string|null>(null); const [sandboxResult,setSandboxResult]=useState<SqlSandboxResult|null>(null); const [sandboxRunning,setSandboxRunning]=useState(false);
   // Client-appended audit entries -- ONLY pushed after a real, successful
   // response comes back (never speculatively). Keyed by incident so a stale
   // entry never appears to describe a different incident's activity.
@@ -38,7 +39,7 @@ export default function Page(){
   // A new incident selection means prior helper answers no longer describe
   // what's on screen -- clear the transcript rather than leaving a stale
   // answer attached to a different incident's context.
-  useEffect(()=>{setHelperMessages([]);setPlaybook(null);setPlaybookError(null);},[selected?.incident_id]);
+  useEffect(()=>{setHelperMessages([]);setPlaybook(null);setPlaybookError(null);setSandboxSql("");setSandboxCheckTitle(null);setSandboxResult(null);},[selected?.incident_id]);
   const healthyPct=data?.monitored_tables?Math.round(data.healthy_tables/data.monitored_tables*100):0;
   const lineageItems:LineageChainItem[]=useMemo(()=>(data?.lineage??[]).map(entry=>({
     table:entry.table_id,
@@ -128,6 +129,64 @@ export default function Page(){
       setPlaybookLoading(false);
     }
   }
+  // Prefills the sandbox textarea from a suggested check -- never runs
+  // anything itself. Logged to the audit trail immediately since "loaded"
+  // is a real, already-completed client action, unlike "executed" which
+  // only gets logged once a run actually completes (see runSandbox below).
+  function loadIntoSandbox(step:PlaybookStepItem){
+    setSandboxSql(step.sql);
+    setSandboxCheckTitle(step.title);
+    setSandboxResult(null);
+    if(selected){
+      appendAudit(selected.incident_id,{
+        step:"debugging_sql_loaded",
+        description:`Loaded "${step.title}" into the debugging SQL sandbox.`,
+        timestamp:new Date().toISOString(),
+        source:"triage_sql_sandbox",
+      });
+    }
+  }
+  function clearSandbox(){
+    setSandboxSql("");
+    setSandboxCheckTitle(null);
+    setSandboxResult(null);
+  }
+  // Runs whatever SQL is currently in the sandbox textarea (loaded from a
+  // suggested check, or hand-edited) through the read-only backend
+  // sandbox. Safety is decided entirely server-side, deterministically
+  // (see api/services/triage_sql_sandbox.py) -- this function never
+  // second-guesses that decision, it only renders whatever status/error/
+  // rows the backend actually returned. The audit entry's wording always
+  // matches the real outcome: only a "success" response says rows were
+  // returned; "rejected"/"error" responses -- or a network failure --
+  // describe the failure honestly instead of claiming results exist.
+  async function runSandbox(){
+    if(!selected||!sandboxSql.trim())return;
+    setSandboxRunning(true);
+    try{
+      const response=await fetch(`${api}/api/v1/triage/sql-sandbox`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+        incident_id:selected.incident_id,sql:sandboxSql,check_title:sandboxCheckTitle,
+      })});
+      const body=await response.json();
+      if(!response.ok)throw new Error(body.detail??"Loupe could not run this check right now.");
+      const result=body as SqlSandboxResult;
+      setSandboxResult(result);
+      const title=sandboxCheckTitle?`"${sandboxCheckTitle}"`:"the sandbox query";
+      if(result.status==="success"){
+        appendAudit(selected.incident_id,{step:"debugging_sql_executed",description:`Ran ${title} — ${result.row_count} row${result.row_count===1?"":"s"} returned.`,timestamp:new Date().toISOString(),source:"triage_sql_sandbox"});
+      }else if(result.status==="rejected"){
+        appendAudit(selected.incident_id,{step:"debugging_sql_rejected",description:`Rejected ${title}: ${result.error??"unsafe or invalid SQL"}`,timestamp:new Date().toISOString(),source:"triage_sql_sandbox"});
+      }else{
+        appendAudit(selected.incident_id,{step:"debugging_sql_executed",description:`Execution failed for ${title}: ${result.error??"unknown error"} -- no results were returned.`,timestamp:new Date().toISOString(),source:"triage_sql_sandbox"});
+      }
+    }catch(err){
+      const message=err instanceof Error?err.message:"Loupe could not run this check right now.";
+      setSandboxResult({status:"error",columns:[],rows:[],row_count:0,bytes_processed:null,error:message,row_limit:25});
+      appendAudit(selected.incident_id,{step:"debugging_sql_executed",description:`Execution failed: ${message} -- no results were returned.`,timestamp:new Date().toISOString(),source:"triage_sql_sandbox"});
+    }finally{
+      setSandboxRunning(false);
+    }
+  }
   const nav = [
     {label:"Warehouse",icon:Gauge,active:activeView==="warehouse",onClick:()=>setActiveView("warehouse")},
     {label:"Source Health",icon:TableProperties,active:activeView==="sourceHealth",onClick:()=>setActiveView("sourceHealth")},
@@ -181,9 +240,22 @@ export default function Page(){
             <ChipList title="Affected governed metrics" items={playbook.affected_governed_metrics} tone="down" emptyLabel="No governed metrics linked."/>
             <RecommendationList title="Investigation checklist" items={playbook.debugging_steps}/>
             <div className="section-subtitle">Debugging workflow <span className="muted small">-- run these SQL checks in order (suggested — not executed automatically)</span></div>
-            <PlaybookWorkflow steps={playbook.sql_checks}/>
+            <PlaybookWorkflow steps={playbook.sql_checks} onLoadStep={loadIntoSandbox}/>
             {!playbook.model&&<p className="muted small">Claude isn&apos;t configured in this environment, so root cause / impact / next action above use an honest fallback rather than an AI narration.</p>}
           </div>}
+        </SectionCard>
+        <SectionCard icon={BookOpen} title="Debugging SQL sandbox" description={selected?`Runs against ${selected.table_id} · read-only`:"Select an incident to run debugging SQL"}>
+          {!selected?<div className="empty-review"><BookOpen size={22}/><strong>No incident selected</strong><span className="muted small">Select an incident, then load a suggested check above or write your own read-only query.</span></div>
+          :<SqlSandbox
+            sql={sandboxSql}
+            onSqlChange={setSandboxSql}
+            onRun={runSandbox}
+            running={sandboxRunning}
+            result={sandboxResult}
+            onClear={clearSandbox}
+            checkTitle={sandboxCheckTitle}
+            rowLimit={sandboxResult?.row_limit??25}
+          />}
         </SectionCard>
         </section>}
 

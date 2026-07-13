@@ -473,9 +473,10 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .code-block + .code-block { margin-top: 12px; }
 .code-block-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .code-block-head-text { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.code-block-head-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .code-block-title { font-size: 13px; font-weight: 650; }
 .code-block-badge { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--muted-foreground); background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
-.code-block-copy { padding: 4px 10px; font-size: 12px; }
+.code-block-copy, .code-block-load { padding: 4px 10px; font-size: 12px; }
 .code-block-pre { margin: 0; padding: 14px 16px; overflow-x: auto; font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--foreground); white-space: pre; }
 
 /* --- PlaybookWorkflow (@loupe/ui) -- numbered step-by-step debugging ----- */
@@ -490,6 +491,29 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .playbook-step-headtext { min-width: 0; }
 .playbook-step-title { font-size: 14px; font-weight: 650; }
 .playbook-step-purpose { margin-top: 2px; line-height: 1.5; }
+
+/* --- SqlSandbox (@loupe/ui) -- read-only debugging query runner --------- */
+.sql-sandbox { display: flex; flex-direction: column; gap: 14px; }
+.sql-sandbox-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sql-sandbox-title { font-size: 14px; font-weight: 650; }
+.sql-sandbox-helper-copy { margin-top: 2px; }
+.sql-sandbox-editor {
+  width: 100%; min-height: 140px; resize: vertical; border: 1px solid var(--border); outline: 0;
+  border-radius: 14px; background: var(--muted); padding: 14px 16px; color: var(--foreground);
+  font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.sql-sandbox-editor:focus-visible { border-color: var(--accent); }
+.sql-sandbox-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sql-sandbox-result { border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; background: var(--card); display: flex; flex-direction: column; gap: 10px; }
+.sql-sandbox-result-rejected { border-color: #d8a64e; }
+.sql-sandbox-result-error { border-color: #ee6a6a; }
+.sql-sandbox-status strong { display: block; font-size: 13.5px; }
+.sql-sandbox-result-rejected .sql-sandbox-status strong { color: #d8a64e; }
+.sql-sandbox-result-error .sql-sandbox-status strong { color: #ee6a6a; }
+.sql-sandbox-result-success .sql-sandbox-status strong { color: var(--accent); }
+.sql-sandbox-table-wrap { max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
+.sql-sandbox-table-wrap .data-table { font-size: 12.5px; }
+.sql-sandbox-table-wrap .data-table th { position: sticky; top: 0; background: var(--card); }
 
 /* --- LineageChain (@loupe/ui) -- table -> governed metric -> downstream --- */
 .lineage-chain { display: flex; flex-direction: column; gap: 14px; }

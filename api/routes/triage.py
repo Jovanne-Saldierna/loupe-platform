@@ -11,10 +11,13 @@ from api.models import (
     TriageHelperResponse,
     TriagePlaybookRequest,
     TriagePlaybookResponse,
+    TriageSqlSandboxRequest,
+    TriageSqlSandboxResponse,
     TriageWarehouseResponse,
 )
 from api.services.triage_helper import answer_triage_question, model_used as helper_model_used
 from api.services.triage_playbook import generate_triage_playbook
+from api.services.triage_sql_sandbox import run_sandbox_query
 from api.services.triage_warehouse import build_warehouse_health, transition_incident
 from shared.config import load_platform_config
 
@@ -88,3 +91,18 @@ def playbook(payload: TriagePlaybookRequest) -> TriagePlaybookResponse:
         return generate_triage_playbook(payload)
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Loupe could not produce a grounded playbook right now.") from exc
+
+
+@router.post("/sql-sandbox", response_model=TriageSqlSandboxResponse)
+def sql_sandbox(payload: TriageSqlSandboxRequest) -> TriageSqlSandboxResponse:
+    """Run one read-only debugging SQL check from the Playbook tab's
+    sandbox (see api/services/triage_sql_sandbox.py and
+    apps/data_quality_triage/sql_sandbox.py for the deterministic,
+    non-AI safety enforcement). Deliberately does not use
+    Depends(get_client): a BigQuery client is only constructed after the
+    submitted SQL has already passed safety validation, so a rejected
+    query never touches the warehouse. Never raises -- every outcome
+    (rejected / error / success) is returned as a 200 response so the
+    sandbox panel can render each state without a special error path."""
+
+    return run_sandbox_query(payload)

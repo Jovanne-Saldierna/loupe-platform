@@ -401,7 +401,7 @@ export function AskLoupePanel({
 // has, with a copy-to-clipboard affordance and an optional short badge
 // (e.g. "Suggested -- not executed"). Never runs, validates, or interprets
 // the code itself -- it's a text block, not an editor or a query client.
-export function CodeBlock({ title, code, badge }: { title?: string; code: string; badge?: string }) {
+export function CodeBlock({ title, code, badge, actions }: { title?: string; code: string; badge?: string; actions?: ReactNode }) {
   return (
     <div className="code-block">
       <div className="code-block-head">
@@ -409,9 +409,12 @@ export function CodeBlock({ title, code, badge }: { title?: string; code: string
           {title && <span className="code-block-title">{title}</span>}
           {badge && <span className="code-block-badge">{badge}</span>}
         </div>
-        <button type="button" className="button ghost code-block-copy" onClick={() => navigator.clipboard.writeText(code)}>
-          <Copy size={13} />Copy
-        </button>
+        <div className="code-block-head-actions">
+          {actions}
+          <button type="button" className="button ghost code-block-copy" onClick={() => navigator.clipboard.writeText(code)}>
+            <Copy size={13} />Copy
+          </button>
+        </div>
       </div>
       <pre className="code-block-pre"><code>{code}</code></pre>
     </div>
@@ -426,7 +429,18 @@ export function CodeBlock({ title, code, badge }: { title?: string; code: string
 // executed" badge, so nothing here ever implies a query has actually run.
 export type PlaybookStepItem = { title: string; purpose: string; sql: string };
 
-export function PlaybookWorkflow({ steps, badge = "Suggested — not executed" }: { steps: PlaybookStepItem[]; badge?: string }) {
+export function PlaybookWorkflow({
+  steps,
+  badge = "Suggested — not executed",
+  onLoadStep,
+}: {
+  steps: PlaybookStepItem[];
+  badge?: string;
+  // When supplied, each step gets a "Load in sandbox" action next to Copy
+  // -- the calling app owns what "loading" means (e.g. prefilling a SQL
+  // sandbox textarea); this component never runs anything itself.
+  onLoadStep?: (step: PlaybookStepItem) => void;
+}) {
   if (!steps.length) return null;
   return (
     <ol className="playbook-workflow">
@@ -439,7 +453,15 @@ export function PlaybookWorkflow({ steps, badge = "Suggested — not executed" }
               <div className="playbook-step-purpose muted small">{step.purpose}</div>
             </div>
           </div>
-          <CodeBlock code={step.sql} badge={badge} />
+          <CodeBlock
+            code={step.sql}
+            badge={badge}
+            actions={onLoadStep && (
+              <button type="button" className="button ghost code-block-load" onClick={() => onLoadStep(step)}>
+                Load in sandbox
+              </button>
+            )}
+          />
         </li>
       ))}
     </ol>
@@ -513,6 +535,123 @@ export function AuditTrailList({ items, emptyLabel }: { items: AuditTrailItem[];
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// --- Debugging SQL sandbox -------------------------------------------------
+// Presentation-only: a read-only SQL editor + result table. This component
+// never talks to a backend, never decides whether SQL is safe, and never
+// claims a query ran -- the calling app owns fetching
+// POST /api/v1/triage/sql-sandbox (whose deterministic, non-AI safety
+// validation lives in apps/data_quality_triage/sql_sandbox.py) and passes
+// back exactly the `status`/`error`/`rows` it received. `result` is only
+// ever rendered as-is: a null result renders nothing, "rejected"/"error"
+// render the error text (never a row table), and only "success" renders
+// rows -- so this component cannot itself misrepresent a failed run as one
+// that returned data.
+export type SqlSandboxResult = {
+  status: "success" | "rejected" | "error";
+  columns: string[];
+  rows: Record<string, unknown>[];
+  row_count: number;
+  bytes_processed: number | null;
+  error: string | null;
+  row_limit: number;
+};
+
+function formatSandboxCell(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  return String(value);
+}
+
+export function SqlSandbox({
+  sql,
+  onSqlChange,
+  onRun,
+  running,
+  result,
+  onClear,
+  checkTitle,
+  rowLimit,
+}: {
+  sql: string;
+  onSqlChange: (value: string) => void;
+  onRun: () => void;
+  running: boolean;
+  result: SqlSandboxResult | null;
+  onClear: () => void;
+  checkTitle?: string | null;
+  rowLimit: number;
+}) {
+  return (
+    <div className="sql-sandbox">
+      <div className="sql-sandbox-head">
+        <div>
+          <div className="sql-sandbox-title">Debugging SQL sandbox</div>
+          <p className="muted small sql-sandbox-helper-copy">
+            Read-only checks only. Suggested queries are not executed until you run them.
+          </p>
+        </div>
+        {checkTitle && <span className="code-block-badge">{checkTitle}</span>}
+      </div>
+      <textarea
+        className="sql-sandbox-editor"
+        value={sql}
+        onChange={(e) => onSqlChange(e.target.value)}
+        placeholder="Click “Load in sandbox” on a suggested check above, or write your own read-only SELECT/WITH query…"
+        spellCheck={false}
+        aria-label="Debugging SQL sandbox editor"
+      />
+      <div className="sql-sandbox-actions">
+        <button type="button" className="button primary" onClick={onRun} disabled={running || !sql.trim()}>
+          {running ? "Running…" : "Run check"}
+        </button>
+        <button type="button" className="button ghost" onClick={onClear} disabled={running}>Clear</button>
+        <span className="muted small">Capped at {rowLimit} rows · suggested SQL only, never executed automatically.</span>
+      </div>
+      {result && (
+        <div className={`sql-sandbox-result sql-sandbox-result-${result.status}`}>
+          {result.status === "rejected" && (
+            <div className="sql-sandbox-status sql-sandbox-status-rejected">
+              <strong>Rejected — unsafe or invalid SQL</strong>
+              <p className="muted small">{result.error}</p>
+            </div>
+          )}
+          {result.status === "error" && (
+            <div className="sql-sandbox-status sql-sandbox-status-error">
+              <strong>Query failed</strong>
+              <p className="muted small">{result.error}</p>
+            </div>
+          )}
+          {result.status === "success" && (
+            <>
+              <div className="sql-sandbox-status sql-sandbox-status-success">
+                <strong>{result.row_count} row{result.row_count === 1 ? "" : "s"} returned</strong>
+                <span className="muted small">
+                  {" "}capped at {result.row_limit}
+                  {result.bytes_processed !== null ? ` · ~${Math.max(1, Math.round(result.bytes_processed / 1_000_000))} MB scanned` : ""}
+                </span>
+              </div>
+              {result.columns.length > 0 ? (
+                <div className="table-wrap sql-sandbox-table-wrap">
+                  <table className="data-table">
+                    <thead><tr>{result.columns.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+                    <tbody>
+                      {result.rows.map((row, i) => (
+                        <tr key={i}>{result.columns.map((c) => <td key={c}>{formatSandboxCell(row[c])}</td>)}</tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="muted small">Query ran successfully but returned no rows.</p>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
