@@ -1029,3 +1029,76 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .asset-impact-kind-agent-view { color: #7d5fd6; background: #ece6fb; }
 .asset-impact-kind-asset { color: var(--muted-foreground); background: var(--card); border: 1px solid var(--border); }
 .asset-impact-label { font-size: 13px; line-height: 1.4; flex: 1 1 240px; min-width: 0; }
+
+/* --- ChangeRiskList (@loupe/ui) -- Definition Diff change-risk categories ---
+   Five fixed rows (Calculation drift / Source table mismatch / Grain
+   mismatch / Filter/status mismatch / Freshness-SLA mismatch), each a
+   status pill + detail line -- reads as a checklist of "what kind of risk,
+   if any" rather than a wall of prose. */
+.change-risk-list { display: flex; flex-direction: column; gap: 8px; }
+.change-risk-row {
+  border-radius: 12px; padding: 10px 14px; background: var(--card); border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+}
+.change-risk-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.change-risk-category { font-size: 13.5px; font-weight: 650; }
+.change-risk-pill {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+  padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+}
+.change-risk-detail { margin-top: 4px; line-height: 1.5; }
+.change-risk-aligned { border-left-color: #1b7a43; }
+.change-risk-pill-aligned { color: #1b7a43; background: #e7f7ee; }
+.change-risk-risk { border-left-color: #c0362c; }
+.change-risk-pill-risk { color: #c0362c; background: #fdecec; }
+.change-risk-unknown { border-left-color: var(--muted-foreground); }
+.change-risk-pill-unknown { color: var(--muted-foreground); background: var(--muted); }
+
+/* --- RecommendationCards (@loupe/ui) -- governance recommendations -------
+   Distinct from RecommendationList's plain checklist rows: each item here
+   carries a priority (info/required/blocking) that changes the card's
+   accent, so "Approve" reads calm and "Block for executive reporting"
+   reads urgent at a glance, before reading any text. */
+.recommendation-cards { margin-top: 12px; }
+.recommendation-cards-title { font-size: 13px; font-weight: 650; margin-bottom: 8px; }
+.recommendation-cards-list { display: flex; flex-direction: column; gap: 10px; }
+.recommendation-card {
+  border-radius: 14px; padding: 14px 16px; background: var(--card); border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+}
+.recommendation-card-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.recommendation-card-priority {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+  padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+}
+.recommendation-card-action { font-size: 14.5px; font-weight: 650; }
+.recommendation-card-rationale { font-size: 13px; line-height: 1.5; color: var(--muted-foreground); }
+.recommendation-card-info { border-left-color: var(--accent); }
+.recommendation-card-info .recommendation-card-priority { color: var(--accent); background: var(--accent-soft); }
+.recommendation-card-required { border-left-color: #b8721f; }
+.recommendation-card-required .recommendation-card-priority { color: #a8551b; background: #fdf0e5; }
+.recommendation-card-blocking { border-left-color: #c0362c; }
+.recommendation-card-blocking .recommendation-card-priority { color: #c0362c; background: #fdecec; }
+
+/* --- SimpleList (@loupe/ui) -- generic selectable row list --------------- */
+.simple-list { display: flex; flex-direction: column; gap: 6px; }
+.simple-list-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  border: 1px solid var(--border); background: var(--card); border-radius: 12px;
+  padding: 10px 14px; cursor: pointer; text-align: left; width: 100%; color: inherit;
+}
+.simple-list-row:hover { border-color: var(--accent); }
+.simple-list-row.selected { border-color: var(--accent); background: var(--accent-soft); }
+.simple-list-row-name { font-weight: 650; font-size: 14px; }
+.simple-list-row-meta { font-size: 12px; color: var(--muted-foreground); white-space: nowrap; }
+
+/* Generic two-column layout (wide primary column + narrower side column) --
+   the same shape Triage's own source-health/incident-timeline split uses,
+   duplicated here as an app-agnostic class so Governance can reuse the
+   pattern without depending on a Triage-scoped class name. */
+.two-col-layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(320px, 1fr); gap: 24px; }
+@media (max-width: 900px) { .two-col-layout { grid-template-columns: 1fr; } }
+
+/* Side-by-side "current vs proposed" logic comparison (Definition Diff). */
+.definition-diff-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 820px) { .definition-diff-columns { grid-template-columns: 1fr; } }

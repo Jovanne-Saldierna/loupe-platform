@@ -4,15 +4,22 @@ from typing import Any
 
 from api.models import (
     CatalogMetric,
+    ChangeRiskItem,
     ContractAlignment,
     GovernanceCatalogResponse,
+    GovernanceRecommendation,
     GovernanceReviewResponse,
     ReviewFinding,
     TrustFactor,
 )
 from apps.metric_governance.persistence import read_catalog, source_health_for_definition
-from apps.metric_governance.remediation import trust_score_inputs_from_review
+from apps.metric_governance.remediation import (
+    derive_change_risk,
+    derive_governance_recommendations,
+    trust_score_inputs_from_review,
+)
 from apps.metric_governance.review import review_sql
+from shared.models import MetricDefinition
 from shared.trust_scoring import compute_trust_score
 
 
@@ -31,18 +38,42 @@ def _catalog(client: Any):
     return result.definitions
 
 
-def list_governed_metrics(client: Any) -> GovernanceCatalogResponse:
-    return GovernanceCatalogResponse(
-        metrics=[
-            CatalogMetric(
-                name=item.name,
-                version=item.version,
-                certification_status=item.certification_status,
-                measurement_grain=item.measurement_grain,
-            )
-            for item in _catalog(client)
-        ]
+def _catalog_metric(client: Any, item: MetricDefinition, *, with_evidence: bool = True) -> CatalogMetric:
+    """Build a full catalog-detail CatalogMetric from a persisted
+    MetricDefinition. `with_evidence` computes this metric's own source
+    health/active incidents (the Catalog tab's "known risks or open
+    incidents" requirement) -- skipped only when the caller already has
+    its own evidence to attach separately (build_governance_review below
+    uses the review's own source_health/active_incident_ids instead, so it
+    passes with_evidence=False to avoid a redundant second lookup)."""
+
+    source_health = None
+    active_incident_ids: list[str] = []
+    if with_evidence:
+        evidence = source_health_for_definition(client, item)
+        source_health = evidence.worst_health.status if evidence.worst_health else None
+        active_incident_ids = [incident.incident_id for incident in evidence.active_incidents]
+
+    return CatalogMetric(
+        name=item.name,
+        version=item.version,
+        certification_status=item.certification_status,
+        measurement_grain=item.measurement_grain,
+        owner=item.owner,
+        description=item.description,
+        formula=item.formula,
+        approved_source_tables=item.approved_source_tables,
+        freshness_expectation=item.freshness_expectation,
+        downstream_dashboards=item.downstream_dashboards,
+        required_filters=item.required_filters,
+        last_reviewed_at=item.last_reviewed_at,
+        source_health=source_health,
+        active_incident_ids=active_incident_ids,
     )
+
+
+def list_governed_metrics(client: Any) -> GovernanceCatalogResponse:
+    return GovernanceCatalogResponse(metrics=[_catalog_metric(client, item) for item in _catalog(client)])
 
 
 def build_governance_review(client: Any, sql: str, metric_name: str) -> GovernanceReviewResponse:
@@ -62,6 +93,19 @@ def build_governance_review(client: Any, sql: str, metric_name: str) -> Governan
     unapproved_observed = [table for table in review.referenced_tables if table not in approved_tables]
     source_status = evidence.worst_health.status if evidence.worst_health else "unknown"
     grain_label = definition.measurement_grain.split(" -- ", 1)[0]
+    active_incident_ids = [incident.incident_id for incident in evidence.active_incidents]
+
+    change_risk = derive_change_risk(review, definition, source_status)
+    recommendations = derive_governance_recommendations(
+        trust_band=trust.band,
+        trust_score=trust.score,
+        review_score=review.score,
+        findings=review.findings,
+        change_risk=change_risk,
+        definition=definition,
+        source_status=source_status,
+        active_incident_ids=active_incident_ids,
+    )
 
     return GovernanceReviewResponse(
         metric=CatalogMetric(
@@ -69,6 +113,16 @@ def build_governance_review(client: Any, sql: str, metric_name: str) -> Governan
             version=definition.version,
             certification_status=definition.certification_status,
             measurement_grain=definition.measurement_grain,
+            owner=definition.owner,
+            description=definition.description,
+            formula=definition.formula,
+            approved_source_tables=definition.approved_source_tables,
+            freshness_expectation=definition.freshness_expectation,
+            downstream_dashboards=definition.downstream_dashboards,
+            required_filters=definition.required_filters,
+            last_reviewed_at=definition.last_reviewed_at,
+            source_health=source_status,
+            active_incident_ids=active_incident_ids,
         ),
         review_score=review.score,
         summary=review.summary,
@@ -81,7 +135,7 @@ def build_governance_review(client: Any, sql: str, metric_name: str) -> Governan
         trust_factors=[TrustFactor(name=f.name, points=f.points, reason=f.reason) for f in trust.factors],
         override_reason=trust.override_reason,
         source_health=source_status,
-        active_incident_ids=[incident.incident_id for incident in evidence.active_incidents],
+        active_incident_ids=active_incident_ids,
         alignment=[
             ContractAlignment(
                 contract="Measurement grain",
@@ -101,5 +155,10 @@ def build_governance_review(client: Any, sql: str, metric_name: str) -> Governan
                 observed=source_status.capitalize(),
                 status="Aligned" if source_status == "healthy" else "Review",
             ),
+        ],
+        downstream_assets=definition.downstream_dashboards,
+        change_risk=[ChangeRiskItem(category=c.category, status=c.status, detail=c.detail) for c in change_risk],
+        recommendations=[
+            GovernanceRecommendation(action=r.action, rationale=r.rationale, priority=r.priority) for r in recommendations
         ],
     )

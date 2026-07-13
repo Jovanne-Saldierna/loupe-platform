@@ -138,6 +138,25 @@ class CatalogMetric(BaseModel):
     version: str
     certification_status: str
     measurement_grain: str
+    # Richer catalog-detail fields (Metric Governance product-depth pass).
+    # All optional/defaulted so existing callers that construct a
+    # CatalogMetric with only the four original fields (e.g. tests,
+    # GovernanceHelperRequest payloads built before this pass) keep
+    # working unchanged -- nothing here is required to make a review run.
+    owner: Optional[str] = None
+    description: Optional[str] = None
+    formula: Optional[str] = None
+    approved_source_tables: list[str] = Field(default_factory=list)
+    freshness_expectation: Optional[str] = None
+    downstream_dashboards: list[str] = Field(default_factory=list)
+    required_filters: list[str] = Field(default_factory=list)
+    last_reviewed_at: Optional[str] = None
+    # Per-metric evidence for the Catalog tab's "known risks or open
+    # incidents" requirement -- computed the same way as a SQL review's
+    # source_health/active_incident_ids, but for the whole catalog, not
+    # just the metric currently under review.
+    source_health: Optional[str] = None
+    active_incident_ids: list[str] = Field(default_factory=list)
 
 
 class GovernanceCatalogResponse(BaseModel):
@@ -168,6 +187,26 @@ class ContractAlignment(BaseModel):
     status: str
 
 
+class ChangeRiskItem(BaseModel):
+    """One Definition Diff risk category -- see
+    apps/metric_governance/remediation.py's derive_change_risk(). `status`
+    is one of "aligned" / "risk" / "unknown"."""
+
+    category: str
+    status: str
+    detail: str
+
+
+class GovernanceRecommendation(BaseModel):
+    """One governance recommendation -- see
+    apps/metric_governance/remediation.py's derive_governance_recommendations().
+    `priority` is one of "info" / "required" / "blocking"."""
+
+    action: str
+    rationale: str
+    priority: str
+
+
 class GovernanceReviewResponse(BaseModel):
     metric: CatalogMetric
     review_score: int
@@ -183,6 +222,12 @@ class GovernanceReviewResponse(BaseModel):
     source_health: str
     active_incident_ids: list[str]
     alignment: list[ContractAlignment]
+    # Product-depth additions: downstream impact, definition-change risk,
+    # and governance recommendations, all deterministic (see
+    # api/services/governance_review.py).
+    downstream_assets: list[str] = Field(default_factory=list)
+    change_risk: list[ChangeRiskItem] = Field(default_factory=list)
+    recommendations: list[GovernanceRecommendation] = Field(default_factory=list)
 
 
 class GovernanceHelperRequest(BaseModel):
@@ -208,6 +253,9 @@ class GovernanceHelperRequest(BaseModel):
     source_health: str
     active_incident_ids: list[str]
     override_reason: Optional[str] = None
+    downstream_assets: list[str] = Field(default_factory=list)
+    change_risk: list[ChangeRiskItem] = Field(default_factory=list)
+    recommendations: list[GovernanceRecommendation] = Field(default_factory=list)
 
 
 class GovernanceHelperResponse(BaseModel):

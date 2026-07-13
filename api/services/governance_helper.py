@@ -58,6 +58,19 @@ def _summarize_review_for_helper(payload: GovernanceHelperRequest) -> str:
     else:
         lines.append("Active data-quality incidents on this metric's source tables: none.")
 
+    if payload.downstream_assets:
+        lines.append("Downstream dashboards/reports on file for this metric: " + ", ".join(payload.downstream_assets))
+
+    if payload.change_risk:
+        lines.append("Definition-change risk categories from the deterministic review:")
+        for item in payload.change_risk:
+            lines.append(f"- {item.category} ({item.status}): {item.detail}")
+
+    if payload.recommendations:
+        lines.append("Governance recommendations already surfaced outside this chat:")
+        for rec in payload.recommendations:
+            lines.append(f"- [{rec.priority}] {rec.action}: {rec.rationale}")
+
     return "\n".join(lines)
 
 

@@ -561,6 +561,91 @@ export function AssetImpactList({ title = "Impacted downstream assets", items, e
   );
 }
 
+// --- Definition-change risk -------------------------------------------------
+// Presentation-only: renders the fixed set of definition-change-risk
+// categories the calling app already computed (e.g. Governance's
+// GovernanceReviewResponse.change_risk, derived deterministically in
+// apps/metric_governance/remediation.py's derive_change_risk() from the
+// SQL review's own findings plus the governed metric's metadata). This
+// component never decides a category's status itself -- "aligned" /
+// "risk" / "unknown" and the detail text are rendered exactly as given.
+export type ChangeRiskCategory = { category: string; status: "aligned" | "risk" | "unknown"; detail: string };
+
+export function ChangeRiskList({ items, emptyLabel }: { items: ChangeRiskCategory[]; emptyLabel?: string }) {
+  if (!items.length) return emptyLabel ? <p className="muted small">{emptyLabel}</p> : null;
+  return (
+    <div className="change-risk-list">
+      {items.map((it) => (
+        <div className={`change-risk-row change-risk-${it.status}`} key={it.category}>
+          <div className="change-risk-head">
+            <span className="change-risk-category">{it.category}</span>
+            <span className={`change-risk-pill change-risk-pill-${it.status}`}>{it.status}</span>
+          </div>
+          <div className="change-risk-detail muted small">{it.detail}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// --- Governance recommendations ---------------------------------------------
+// Presentation-only: renders the deterministic recommendation cards the
+// calling app already computed (e.g. Governance's
+// GovernanceReviewResponse.recommendations, derived in
+// apps/metric_governance/remediation.py's derive_governance_recommendations()
+// from the trust score, findings, change risk, and metric metadata already
+// on screen). Ask Loupe may narrate *why* these matter, but this component
+// -- and the deterministic function behind it -- is what puts them on
+// screen; nothing here is only visible inside a chat transcript.
+export type GovernanceRecommendationItem = { action: string; rationale: string; priority: "info" | "required" | "blocking" };
+
+export function RecommendationCards({ title, items, emptyLabel }: { title?: string; items: GovernanceRecommendationItem[]; emptyLabel?: string }) {
+  if (!items.length) return emptyLabel ? <p className="muted small">{emptyLabel}</p> : null;
+  return (
+    <div className="recommendation-cards">
+      {title && <div className="recommendation-cards-title">{title}</div>}
+      <div className="recommendation-cards-list">
+        {items.map((it, i) => (
+          <div className={`recommendation-card recommendation-card-${it.priority}`} key={`${it.action}-${i}`}>
+            <div className="recommendation-card-head">
+              <span className="recommendation-card-priority">{it.priority}</span>
+              <span className="recommendation-card-action">{it.action}</span>
+            </div>
+            <div className="recommendation-card-rationale">{it.rationale}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// --- Simple selectable list --------------------------------------------------
+// Generic presentation-only selector row list -- a name, an optional muted
+// meta string, and a selected state -- for any calling app that needs "pick
+// one of these, see its detail elsewhere on the page" (e.g. Governance's
+// Catalog tab metric picker). Not tied to any one app's domain; the calling
+// app owns what "selected" means and what happens on click.
+export type SimpleListItem = { id: string; name: string; meta?: string };
+
+export function SimpleList({ items, selectedId, onSelect }: { items: SimpleListItem[]; selectedId?: string | null; onSelect: (id: string) => void }) {
+  if (!items.length) return null;
+  return (
+    <div className="simple-list">
+      {items.map((it) => (
+        <button
+          type="button"
+          key={it.id}
+          className={`simple-list-row${selectedId === it.id ? " selected" : ""}`}
+          onClick={() => onSelect(it.id)}
+        >
+          <span className="simple-list-row-name">{it.name}</span>
+          {it.meta && <span className="simple-list-row-meta">{it.meta}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // --- Audit trail ----------------------------------------------------------
 // Presentation-only vertical trail of named steps -- deterministic facts
 // (metadata loaded, check evaluated, incident generated) and, when the

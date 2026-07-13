@@ -1,4 +1,11 @@
-from api.models import CatalogMetric, GovernanceHelperRequest, ReviewFinding, TrustFactor
+from api.models import (
+    CatalogMetric,
+    ChangeRiskItem,
+    GovernanceHelperRequest,
+    GovernanceRecommendation,
+    ReviewFinding,
+    TrustFactor,
+)
 from api.services import governance_helper
 
 
@@ -81,3 +88,39 @@ def test_helper_includes_override_reason_when_present(monkeypatch):
     governance_helper.answer_governance_question(_payload(override_reason="Manually reviewed by data eng."))
 
     assert "Manually reviewed by data eng." in captured["state_summary"]
+
+
+def test_helper_summary_includes_downstream_assets_change_risk_and_recommendations(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        governance_helper,
+        "ask_dashboard",
+        lambda question, state_summary: captured.setdefault("state_summary", state_summary) or "ok",
+    )
+
+    governance_helper.answer_governance_question(_payload(
+        downstream_assets=["loupe_agent dashboard: KPI summary, revenue trend"],
+        change_risk=[ChangeRiskItem(category="Calculation drift", status="risk", detail="Avoid SELECT * in governed metric SQL.")],
+        recommendations=[GovernanceRecommendation(action="Needs review", rationale="Trust score is 62.", priority="required")],
+    ))
+
+    summary = captured["state_summary"]
+    assert "loupe_agent dashboard: KPI summary, revenue trend" in summary
+    assert "Calculation drift (risk): Avoid SELECT * in governed metric SQL." in summary
+    assert "[required] Needs review: Trust score is 62." in summary
+
+
+def test_helper_summary_omits_new_sections_when_not_supplied(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        governance_helper,
+        "ask_dashboard",
+        lambda question, state_summary: captured.setdefault("state_summary", state_summary) or "ok",
+    )
+
+    governance_helper.answer_governance_question(_payload())
+
+    summary = captured["state_summary"]
+    assert "Downstream dashboards/reports on file" not in summary
+    assert "Definition-change risk categories" not in summary
+    assert "Governance recommendations already surfaced" not in summary

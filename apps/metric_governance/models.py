@@ -60,3 +60,43 @@ class SqlReviewResult:
     findings: list[SqlReviewFinding]
     referenced_tables: list[str]
     recommended_next_steps: list[str]
+
+
+# Definition-change risk status for one category (see remediation.py's
+# derive_change_risk()): "aligned" means the deterministic review/metadata
+# found no gap for that category, "risk" means a real gap was found, and
+# "unknown" means there wasn't enough evidence to judge either way (e.g. no
+# tables were referenced at all, or source health couldn't be resolved) --
+# "unknown" is never silently upgraded to "aligned" or "risk".
+ChangeRiskStatus = Literal["aligned", "risk", "unknown"]
+
+
+@dataclass(frozen=True)
+class ChangeRiskCategory:
+    """One deterministic definition-change-risk category, derived only
+    from an already-computed SqlReviewResult plus the governed
+    MetricDefinition's own fields (see remediation.py's
+    derive_change_risk()) -- never a fabricated or LLM-authored diff."""
+
+    category: str
+    status: ChangeRiskStatus
+    detail: str
+
+
+# A recommendation's urgency: "info" is a passive status note (e.g.
+# "approve"), "required" means action should happen before the definition
+# is broadly relied on, and "blocking" means it should not be used for
+# executive reporting until resolved.
+RecommendationPriority = Literal["info", "required", "blocking"]
+
+
+@dataclass(frozen=True)
+class GovernanceRecommendationItem:
+    """One deterministic governance recommendation, derived only from
+    already-computed review/trust/change-risk fields (see remediation.py's
+    derive_governance_recommendations()) -- never invented by, or only
+    surfaced through, the Ask Loupe helper."""
+
+    action: str
+    rationale: str
+    priority: RecommendationPriority
