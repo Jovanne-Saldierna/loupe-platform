@@ -16,9 +16,18 @@ def test_null_check_type_returns_null_rate_sql():
     assert "COUNTIF" in checks[0].sql
 
 
-def test_freshness_check_type_returns_freshness_sql():
+def test_freshness_check_type_returns_a_multi_step_investigation_workflow():
     checks = suggested_sql_checks("freshness_delay", "order_items")
+    # Requirement: at minimum (1) latest timestamp vs threshold, (2) row
+    # counts by day/hour over 7-14 days, (3) inspect latest records.
+    assert len(checks) >= 3
     assert "minutes_since_latest_row" in checks[0].sql
+    joined_sql = "\n".join(c.sql for c in checks)
+    joined_titles = " ".join(c.title.lower() for c in checks)
+    assert "row_count" in joined_sql
+    assert "day" in joined_titles or "hour" in joined_titles
+    assert "latest records" in joined_titles or "inspect" in joined_titles
+    assert all(c.purpose for c in checks)
 
 
 def test_row_count_check_type_returns_row_count_sql():
@@ -62,3 +71,9 @@ def test_debugging_steps_never_empty_even_for_unknown_check_type():
     steps = suggested_debugging_steps("totally_unrecognized", "order_items")
     assert len(steps) == 3
     assert all(isinstance(s, str) and s for s in steps)
+
+
+def test_every_suggested_check_across_every_family_has_a_purpose():
+    for check_type in ["duplicate_key_ratio", "null_ratio", "freshness_delay", "row_count_empty", "schema_drift", "unrecognized"]:
+        for check in suggested_sql_checks(check_type, "order_items"):
+            assert isinstance(check.purpose, str) and check.purpose.strip()

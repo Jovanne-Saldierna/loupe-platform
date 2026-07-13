@@ -30,6 +30,10 @@ from apps.data_quality_triage.profiling import QUALIFIED_DATASET
 @dataclass(frozen=True)
 class SuggestedSqlCheck:
     title: str
+    # Plain-language description of what this specific query validates --
+    # rendered above the SQL in the frontend's step-by-step playbook so each
+    # step reads as "why am I running this" before "what does it say."
+    purpose: str
     sql: str
 
 
@@ -52,6 +56,7 @@ def _row_count_checks(table_id: str) -> list[SuggestedSqlCheck]:
     return [
         SuggestedSqlCheck(
             title="Compare recent row counts to a trailing baseline",
+            purpose="Confirms whether today's load is genuinely short of rows, or in line with the trailing 14-day pattern.",
             sql=(
                 f"{_SQL_COMMENT_HEADER}\n"
                 f"SELECT\n"
@@ -71,6 +76,7 @@ def _null_rate_checks(table_id: str) -> list[SuggestedSqlCheck]:
     return [
         SuggestedSqlCheck(
             title="Calculate null rate over time for the affected column",
+            purpose="Shows whether the null rate spiked suddenly (likely an upstream schema/ETL change) or has been drifting gradually.",
             sql=(
                 f"{_SQL_COMMENT_HEADER}\n"
                 f"-- Replace <column> with the column the incident flagged.\n"
@@ -93,6 +99,7 @@ def _duplicate_key_checks(table_id: str) -> list[SuggestedSqlCheck]:
     return [
         SuggestedSqlCheck(
             title="Check duplicate business keys",
+            purpose="Confirms whether the flagged key is actually duplicated, and how many rows and which keys are affected.",
             sql=(
                 f"{_SQL_COMMENT_HEADER}\n"
                 f"-- Replace `id` with the table's actual business/primary key if different.\n"
@@ -110,10 +117,16 @@ def _duplicate_key_checks(table_id: str) -> list[SuggestedSqlCheck]:
 
 
 def _freshness_checks(table_id: str) -> list[SuggestedSqlCheck]:
+    """Three-step freshness investigation workflow, in the order a data
+    engineer would actually work through them: first confirm how stale the
+    table is against the SLA threshold, then see whether the shortfall is a
+    sudden drop or a gradual decline by day/hour, then look directly at the
+    most recent rows to see what (if anything) is still landing."""
     table = _qualified(table_id)
     return [
         SuggestedSqlCheck(
             title="Compare latest timestamp to the expected freshness threshold",
+            purpose="Confirms exactly how far behind the SLA this table currently is, in minutes.",
             sql=(
                 f"{_SQL_COMMENT_HEADER}\n"
                 f"SELECT\n"
@@ -121,7 +134,46 @@ def _freshness_checks(table_id: str) -> list[SuggestedSqlCheck]:
                 f"  TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), MAX(created_at), MINUTE) AS minutes_since_latest_row\n"
                 f"FROM {table};"
             ),
-        )
+        ),
+        SuggestedSqlCheck(
+            title="Check row counts by day over the last 7-14 days",
+            purpose="Shows whether the pipeline stopped abruptly or has been steadily slowing down, by comparing daily volume across the trailing window.",
+            sql=(
+                f"{_SQL_COMMENT_HEADER}\n"
+                f"SELECT\n"
+                f"  DATE(created_at) AS day,\n"
+                f"  COUNT(*) AS row_count\n"
+                f"FROM {table}\n"
+                f"WHERE created_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 14 DAY)\n"
+                f"GROUP BY day\n"
+                f"ORDER BY day DESC;"
+            ),
+        ),
+        SuggestedSqlCheck(
+            title="Check row counts by hour over the last 48 hours",
+            purpose="Pinpoints the hour the load actually stopped or slowed, which is often the fastest way to correlate with an upstream deploy or job failure.",
+            sql=(
+                f"{_SQL_COMMENT_HEADER}\n"
+                f"SELECT\n"
+                f"  TIMESTAMP_TRUNC(created_at, HOUR) AS hour,\n"
+                f"  COUNT(*) AS row_count\n"
+                f"FROM {table}\n"
+                f"WHERE created_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR)\n"
+                f"GROUP BY hour\n"
+                f"ORDER BY hour DESC;"
+            ),
+        ),
+        SuggestedSqlCheck(
+            title="Inspect the latest records by created_at",
+            purpose="Shows exactly what the most recent rows look like -- useful for spotting a partial load, a stuck job, or that new rows genuinely stopped arriving.",
+            sql=(
+                f"{_SQL_COMMENT_HEADER}\n"
+                f"SELECT *\n"
+                f"FROM {table}\n"
+                f"ORDER BY created_at DESC\n"
+                f"LIMIT 50;"
+            ),
+        ),
     ]
 
 
@@ -131,6 +183,7 @@ def _schema_drift_checks(table_id: str) -> list[SuggestedSqlCheck]:
     return [
         SuggestedSqlCheck(
             title="Inspect current column names and types",
+            purpose="Shows the table's live schema so it can be diffed against the last known-good baseline to spot what changed.",
             sql=(
                 f"{_SQL_COMMENT_HEADER}\n"
                 f"SELECT column_name, data_type\n"
@@ -147,6 +200,7 @@ def _generic_checks(table_id: str) -> list[SuggestedSqlCheck]:
     return [
         SuggestedSqlCheck(
             title="Spot-check recent rows",
+            purpose="A general first look at the most recent data when the check_type doesn't match a more specific investigation template.",
             sql=(
                 f"{_SQL_COMMENT_HEADER}\n"
                 f"SELECT *\n"
@@ -200,7 +254,7 @@ def suggested_debugging_steps(check_type: str, table_id: str) -> list[str]:
         return [
             f"Check whether the scheduled load or pipeline for {table_id} ran on time.",
             "Look for upstream extraction failures, retries, or delays in the pipeline's own logs.",
-            "Run the freshness SQL check below to see exactly how far behind the data currently is.",
+            "Work through the freshness SQL checks below to see exactly how far behind the data is and when it stopped landing.",
         ]
     if "row_count" in key or "empty" in key or "volume" in key:
         return [

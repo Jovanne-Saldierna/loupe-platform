@@ -341,6 +341,11 @@ class TriageHelperResponse(BaseModel):
 
 class SqlCheck(BaseModel):
     title: str
+    # Plain-language description of what this specific query validates --
+    # deterministic, from apps/data_quality_triage/sql_checks.py, never
+    # AI-narrated. Lets the frontend render each check as a labeled step in
+    # an investigation workflow instead of an unexplained code block.
+    purpose: str
     sql: str
 
 

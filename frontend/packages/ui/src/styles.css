@@ -417,12 +417,22 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .chat-empty svg { color: var(--accent); }
 .chat-chip-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .chat-chip-row-compact { justify-content: flex-start; margin-bottom: 10px; }
+/* Uses theme tokens (not a hardcoded #fff) so this reads correctly on both
+   the light Loupe/Governance themes and Triage's dark "Midnight Command"
+   theme -- a chip must be legible without hovering in either. Enabled chips
+   get a slightly accent-tinted border by default so they read as active
+   and clickable even before the pointer reaches them; disabled chips keep
+   full text contrast (via --muted-foreground) and only differ by cursor +
+   a lighter border, never by falling back to low-opacity near-invisible
+   text (see themes.css product-triage for why plain opacity broke this). */
 .chat-chip {
-  border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 7px 14px;
-  font-size: 13px; color: var(--foreground); cursor: pointer;
+  border: 1px solid var(--border); background: var(--card); border-radius: 999px; padding: 7px 14px;
+  font-size: 13px; font-weight: 600; color: var(--foreground); cursor: pointer;
+  transition: border-color .15s ease, color .15s ease, background-color .15s ease;
 }
-.chat-chip:hover { border-color: var(--accent); color: var(--accent); }
-.chat-chip:disabled { opacity: .5; cursor: not-allowed; }
+.chat-chip:not(:disabled) { border-color: var(--accent-soft); }
+.chat-chip:hover:not(:disabled), .chat-chip:focus-visible:not(:disabled) { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); outline: none; }
+.chat-chip:disabled { color: var(--muted-foreground); border-color: var(--border); cursor: not-allowed; }
 
 .chat-message-group { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .chat-bubble { max-width: 100%; border-radius: 16px; padding: 11px 16px; font-size: 14px; line-height: 1.5; }
@@ -467,6 +477,19 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .code-block-badge { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--muted-foreground); background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
 .code-block-copy { padding: 4px 10px; font-size: 12px; }
 .code-block-pre { margin: 0; padding: 14px 16px; overflow-x: auto; font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--foreground); white-space: pre; }
+
+/* --- PlaybookWorkflow (@loupe/ui) -- numbered step-by-step debugging ----- */
+.playbook-workflow { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 20px; }
+.playbook-step { position: relative; padding-left: 4px; }
+.playbook-step + .playbook-step { padding-top: 20px; border-top: 1px solid var(--border); }
+.playbook-step-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.playbook-step-number {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent);
+  display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;
+}
+.playbook-step-headtext { min-width: 0; }
+.playbook-step-title { font-size: 14px; font-weight: 650; }
+.playbook-step-purpose { margin-top: 2px; line-height: 1.5; }
 
 /* --- LineageChain (@loupe/ui) -- table -> governed metric -> downstream --- */
 .lineage-chain { display: flex; flex-direction: column; gap: 14px; }

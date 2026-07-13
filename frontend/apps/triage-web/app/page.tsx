@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertTriangle, BookOpen, CheckCircle2, CircleDot, Gauge, GitBranch, ListChecks, RefreshCw, Siren, TableProperties } from "lucide-react";
-import { AppShell, AskLoupePanel, AuditTrailList, Badge, ChipList, CodeBlock, FactPairGrid, LineageChain, MiniStatStrip, RecommendationList, SectionCard, Stat, Unavailable } from "@loupe/ui";
+import { AppShell, AskLoupePanel, AuditTrailList, Badge, ChipList, FactPairGrid, LineageChain, MiniStatStrip, PlaybookWorkflow, RecommendationList, SectionCard, Stat, Unavailable } from "@loupe/ui";
 import type { AuditTrailItem, HelperMessage, LineageChainItem } from "@loupe/ui";
 
 type TableHealth={table_id:string;status:"healthy"|"degraded"|"critical"|"unknown";freshness_minutes:number|null;active_incident_count:number};
@@ -11,14 +11,15 @@ type Incident={incident_id:string;table_id:string;check_type:string;severity:str
 type LineageMetric={name:string;downstream_dashboards:string[]};
 type TriageLineage={table_id:string;governed_metrics:LineageMetric[]};
 type Warehouse={generated_at:string;dataset:string;monitored_tables:number;healthy_tables:number;degraded_tables:number;critical_tables:number;open_incidents:number;freshness_minutes:number|null;tables:TableHealth[];incidents:Incident[];lineage:TriageLineage[]};
-type TriageView = "warehouse" | "sourceHealth" | "incidentQueue";
-type SqlCheck={title:string;sql:string};
+type TriageView = "warehouse" | "sourceHealth" | "incidentQueue" | "playbook" | "lineage" | "auditTrail";
+type SqlCheck={title:string;purpose:string;sql:string};
 type Playbook={likely_root_cause:string;impact_summary:string;affected_downstream_assets:string[];affected_governed_metrics:string[];debugging_steps:string[];sql_checks:SqlCheck[];owner_recommendation:string;next_action:string;model:string|null};
 
 const HELPER_PROMPTS = [
   "What happened here?",
   "Is this a data issue or a real business issue?",
   "What should I check next?",
+  "Which metrics are affected?",
 ];
 
 export default function Page(){
@@ -131,13 +132,22 @@ export default function Page(){
     {label:"Warehouse",icon:Gauge,active:activeView==="warehouse",onClick:()=>setActiveView("warehouse")},
     {label:"Source Health",icon:TableProperties,active:activeView==="sourceHealth",onClick:()=>setActiveView("sourceHealth")},
     {label:"Incident Queue",icon:Siren,active:activeView==="incidentQueue",onClick:()=>setActiveView("incidentQueue")},
+    {label:"Playbook",icon:BookOpen,active:activeView==="playbook",onClick:()=>setActiveView("playbook")},
+    {label:"Lineage",icon:GitBranch,active:activeView==="lineage",onClick:()=>setActiveView("lineage")},
+    {label:"Audit Trail",icon:ListChecks,active:activeView==="auditTrail",onClick:()=>setActiveView("auditTrail")},
   ];
+  // Shared across every tab: whichever incident was last selected in Source
+  // Health or Incident Queue is exactly what Playbook/Lineage/Audit Trail
+  // render for -- a single `selected` state, no per-tab copies, so picking
+  // the seeded incident anywhere immediately unlocks the other tabs.
+  const selectedSubtitle = selected?`${selected.incident_id} · ${selected.table_id} · ${selected.check_type.replaceAll("_"," ")}`:"No incident selected";
   return <AppShell active="triage" brand="Triage" brandIcon={Activity} navigation={nav}>
     <div className="dashboard-surface">
       <header className="hero-panel page-header"><div><div className="eyebrow">RELIABILITY LAYER</div><h1>Warehouse health</h1><div className="muted">Persisted incidents across governed data sources</div></div><div className="actions"><Badge>{data?`${data.monitored_tables} sources monitored`:"Live persistence"}</Badge><button className="button" onClick={load} disabled={loading}><RefreshCw size={15}/>{loading?"Refreshing…":"Refresh"}</button></div></header>
       {error&&<Unavailable message={error}/>} {loading&&!data?<div className="card skeleton" aria-label="Loading warehouse health"/>:data&&<>
         {activeView==="warehouse"&&<section><div className="section-title">Key metrics</div><div className="metric-grid"><Stat label="Healthy tables" value={String(data.healthy_tables)} change={`${healthyPct}%`}/><Stat label="Open incidents" value={String(data.open_incidents)} change={`${data.critical_tables} critical`}/><Stat label="Sources healthy" value={`${healthyPct}%`} change={`${data.monitored_tables} governed`}/><Stat label="Max freshness" value={formatFreshness(data.freshness_minutes)} change="metadata"/></div></section>}
-        {activeView==="sourceHealth"&&<section><div className="section-title">Operations</div><div className="triage-layout"><SectionCard icon={TableProperties} title="Governed source health" description="Current persisted incident state" action={<Badge>Live</Badge>}><div className="health-bars">{data.tables.map(table=><button key={table.table_id} className="health-row" onClick={()=>setSelected(data.incidents.find(i=>i.table_id===table.table_id)??null)}><span className="health-name-wrap"><span className="health-name">{table.table_id}</span><span className="health-count">{table.active_incident_count} active incident{table.active_incident_count===1?"":"s"}</span></span><span className="health-track"><span className={`health-fill health-${table.status}`} style={{width:table.status==="healthy"?"100%":table.status==="degraded"?"62%":table.status==="critical"?"35%":"18%"}}/></span><span className={`status-dot status-${table.status}`}>{table.status}</span></button>)}</div></SectionCard><SectionCard icon={Siren} title="Incident timeline" description={selected?`${selected.table_id} · ${selected.check_type}`:"No active incident selected"} action={selected&&<Badge tone="warning">{selected.severity}</Badge>}>{selected?<><div className="timeline"><TimelineStep icon={CircleDot} label="Detected" detail={new Date(selected.created_at).toLocaleString()}/><TimelineStep icon={CheckCircle2} label={selected.status} detail={selected.owner?`Owner: ${selected.owner}`:"Owner unassigned"}/>{selected.affected_metrics.length>0&&<TimelineStep icon={AlertTriangle} label="Affected metrics" detail={selected.affected_metrics.join(", ")}/>}</div><FactPairGrid items={observedExpectedFacts(selected)}/><ChipList title="Affected governed metrics" items={selected.governed_metric_names} tone="down" emptyLabel="No governed metrics linked."/><div className="incident-actions">{selected.next_allowed_statuses.map(status=><button className="button" key={status} disabled={transitioning} onClick={()=>transition(status)}>{status.replaceAll("_"," ")}</button>)}</div>{selected.next_allowed_statuses.includes("resolved")&&<textarea className="notes" value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Required resolution notes" aria-label="Resolution notes"/>}</>:<div className="empty-review"><CheckCircle2 size={24}/><strong>No active incidents</strong><span className="muted small">Governed sources currently have no persisted active incidents.</span></div>}</SectionCard></div>
+
+        {activeView==="sourceHealth"&&<section><div className="section-title">Governed source health</div><div className="triage-layout"><SectionCard icon={TableProperties} title="Governed source health" description="Current persisted incident state" action={<Badge>Live</Badge>}><div className="health-bars">{data.tables.map(table=><button key={table.table_id} className="health-row" onClick={()=>setSelected(data.incidents.find(i=>i.table_id===table.table_id)??null)}><span className="health-name-wrap"><span className="health-name">{table.table_id}</span><span className="health-count">{table.active_incident_count} active incident{table.active_incident_count===1?"":"s"}</span></span><span className="health-track"><span className={`health-fill health-${table.status}`} style={{width:table.status==="healthy"?"100%":table.status==="degraded"?"62%":table.status==="critical"?"35%":"18%"}}/></span><span className={`status-dot status-${table.status}`}>{table.status}</span></button>)}</div></SectionCard><SectionCard icon={Siren} title="Incident timeline" description={selected?`${selected.table_id} · ${selected.check_type}`:"No active incident selected"} action={selected&&<Badge tone="warning">{selected.severity}</Badge>}>{selected?<><div className="timeline"><TimelineStep icon={CircleDot} label="Detected" detail={new Date(selected.created_at).toLocaleString()}/><TimelineStep icon={CheckCircle2} label={selected.status} detail={selected.owner?`Owner: ${selected.owner}`:"Owner unassigned"}/>{selected.affected_metrics.length>0&&<TimelineStep icon={AlertTriangle} label="Affected metrics" detail={selected.affected_metrics.join(", ")}/>}</div><FactPairGrid items={observedExpectedFacts(selected)}/><ChipList title="Affected governed metrics" items={selected.governed_metric_names} tone="down" emptyLabel="No governed metrics linked."/><div className="incident-actions">{selected.next_allowed_statuses.map(status=><button className="button" key={status} disabled={transitioning} onClick={()=>transition(status)}>{status.replaceAll("_"," ")}</button>)}</div>{selected.next_allowed_statuses.includes("resolved")&&<textarea className="notes" value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Required resolution notes" aria-label="Resolution notes"/>}</>:<div className="empty-review"><CheckCircle2 size={24}/><strong>No active incidents</strong><span className="muted small">Governed sources currently have no persisted active incidents.</span></div>}</SectionCard></div>
         <div className="section-title">Loupe AI helper</div>
         <AskLoupePanel
           title="Ask Loupe"
@@ -152,31 +162,42 @@ export default function Page(){
           placeholder="Ask about this incident's cause, affected metrics, or next steps…"
           samplePrompts={HELPER_PROMPTS}
         />
-        <div className="section-title">AI-generated triage playbook</div>
-        <SectionCard icon={BookOpen} title="Triage playbook" description={selected?`Grounded in incident ${selected.incident_id} · ${selected.table_id}`:"Select an incident to generate a playbook"} action={selected&&<button className="button" onClick={generatePlaybook} disabled={playbookLoading}>{playbookLoading?"Generating…":playbook?"Regenerate":"Generate playbook"}</button>}>
-          {!selected?<div className="empty-review"><BookOpen size={24}/><strong>No incident selected</strong><span className="muted small">Select a source health row or incident to generate a grounded triage playbook.</span></div>
+        </section>}
+
+        {activeView==="incidentQueue"&&<section><div className="section-title">Incident queue</div><SectionCard icon={AlertTriangle} title="Active incident queue" description="Prioritized by deterministic severity rules" action={<Badge tone={data.incidents.length?"warning":"accent"}>{data.incidents.length} active</Badge>}><MiniStatStrip items={severityStrip(data.incidents)}/>{data.incidents.length?<div className="table-wrap"><table className="data-table incident-table"><thead><tr><th>Severity</th><th>Incident</th><th>Affected metrics</th><th>Age</th><th>Status</th></tr></thead><tbody>{data.incidents.map(incident=><tr key={incident.incident_id} onClick={()=>setSelected(incident)} className={selected?.incident_id===incident.incident_id?"selected":""}><td><span className={`severity severity-${incident.severity}`}>{incident.severity}</span></td><td><strong>{incident.table_id}</strong><div className="muted small">{incident.check_type.replaceAll("_"," ")}</div></td><td>{incident.affected_metrics.join(", ")||"None mapped"}</td><td>{formatAge(incident.created_at)}</td><td>{incident.status}</td></tr>)}</tbody></table></div>:<div className="queue-empty"><CheckCircle2 size={18}/>No active incidents</div>}</SectionCard>
+        <SectionCard icon={CircleDot} title="Selected incident facts" description={selectedSubtitle}>
+          {selected?<><FactPairGrid items={observedExpectedFacts(selected)}/><ChipList title="Affected governed metrics" items={selected.governed_metric_names} tone="down" emptyLabel="No governed metrics linked."/><ChipList title="Downstream assets" items={selected.downstream_assets} tone="down" emptyLabel="No downstream assets on file."/></>:<div className="empty-review"><CircleDot size={22}/><strong>No incident selected</strong><span className="muted small">Select a row above to see its facts, or open Source Health.</span></div>}
+        </SectionCard>
+        </section>}
+
+        {activeView==="playbook"&&<section><div className="section-title">AI-generated triage playbook</div>
+        <SectionCard icon={BookOpen} title="Triage playbook" description={selectedSubtitle} action={selected&&<button className="button" onClick={generatePlaybook} disabled={playbookLoading}>{playbookLoading?"Generating…":playbook?"Regenerate":"Generate playbook"}</button>}>
+          {!selected?<div className="empty-review"><BookOpen size={24}/><strong>No incident selected</strong><span className="muted small">Select an incident in Source Health or Incident Queue to generate a grounded triage playbook.</span></div>
           :playbookError?<Unavailable message={playbookError}/>
           :!playbook?<div className="empty-review"><BookOpen size={24}/><strong>No playbook generated yet</strong><span className="muted small">Generate a playbook grounded only in this incident's persisted fields -- nothing is fabricated.</span></div>
           :<div className="playbook-body">
             <FactPairGrid items={[{label:"Likely root cause",value:playbook.likely_root_cause},{label:"Impact summary",value:playbook.impact_summary},{label:"Owner recommendation",value:playbook.owner_recommendation},{label:"Next action",value:playbook.next_action}]}/>
             <ChipList title="Affected downstream assets" items={playbook.affected_downstream_assets} tone="down" emptyLabel="No downstream assets on file for this table."/>
             <ChipList title="Affected governed metrics" items={playbook.affected_governed_metrics} tone="down" emptyLabel="No governed metrics linked."/>
-            <RecommendationList title="Debugging steps" items={playbook.debugging_steps}/>
-            <div className="section-subtitle">Example SQL checks <span className="muted small">(suggested — not executed automatically)</span></div>
-            {playbook.sql_checks.map(check=><CodeBlock key={check.title} title={check.title} code={check.sql} badge="Suggested — not executed"/>)}
+            <RecommendationList title="Investigation checklist" items={playbook.debugging_steps}/>
+            <div className="section-subtitle">Debugging workflow <span className="muted small">-- run these SQL checks in order (suggested — not executed automatically)</span></div>
+            <PlaybookWorkflow steps={playbook.sql_checks}/>
             {!playbook.model&&<p className="muted small">Claude isn&apos;t configured in this environment, so root cause / impact / next action above use an honest fallback rather than an AI narration.</p>}
           </div>}
         </SectionCard>
-        <div className="section-title">Lineage &amp; downstream impact</div>
+        </section>}
+
+        {activeView==="lineage"&&<section><div className="section-title">Lineage &amp; downstream impact</div>
         <SectionCard icon={GitBranch} title="Source → governed metric → downstream asset" description="Persisted catalog lineage for governed sources">
           <LineageChain items={lineageItems} emptyLabel="No governed lineage on file for the currently monitored sources."/>
         </SectionCard>
-        <div className="section-title">Audit trail</div>
+        </section>}
+
+        {activeView==="auditTrail"&&<section><div className="section-title">Audit trail</div>
         <SectionCard icon={ListChecks} title="Incident activity" description={selected?`${selected.incident_id} · deterministic + AI-triggered steps`:"Select an incident to see its audit trail"}>
-          {selected?<AuditTrailList items={combinedAudit} emptyLabel="No audit entries recorded for this incident yet."/>:<div className="empty-review"><ListChecks size={24}/><strong>No incident selected</strong><span className="muted small">Select an incident to see what metadata was loaded, which check ran, and when the incident was generated.</span></div>}
+          {selected?<AuditTrailList items={combinedAudit} emptyLabel="No audit entries recorded for this incident yet."/>:<div className="empty-review"><ListChecks size={24}/><strong>No incident selected</strong><span className="muted small">Select an incident in Source Health or Incident Queue to see what metadata was loaded, which check ran, and when the incident was generated.</span></div>}
         </SectionCard>
-      </section>}
-        {activeView==="incidentQueue"&&<section><div className="section-title">Incident queue</div><SectionCard icon={AlertTriangle} title="Active incident queue" description="Prioritized by deterministic severity rules" action={<Badge tone={data.incidents.length?"warning":"accent"}>{data.incidents.length} active</Badge>}><MiniStatStrip items={severityStrip(data.incidents)}/>{data.incidents.length?<div className="table-wrap"><table className="data-table incident-table"><thead><tr><th>Severity</th><th>Incident</th><th>Affected metrics</th><th>Age</th><th>Status</th></tr></thead><tbody>{data.incidents.map(incident=><tr key={incident.incident_id} onClick={()=>setSelected(incident)} className={selected?.incident_id===incident.incident_id?"selected":""}><td><span className={`severity severity-${incident.severity}`}>{incident.severity}</span></td><td><strong>{incident.table_id}</strong><div className="muted small">{incident.check_type.replaceAll("_"," ")}</div></td><td>{incident.affected_metrics.join(", ")||"None mapped"}</td><td>{formatAge(incident.created_at)}</td><td>{incident.status}</td></tr>)}</tbody></table></div>:<div className="queue-empty"><CheckCircle2 size={18}/>No active incidents</div>}</SectionCard></section>}
+        </section>}
       </>}
     </div>
   </AppShell>;

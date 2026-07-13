@@ -141,7 +141,7 @@ def generate_triage_playbook(payload: TriagePlaybookRequest) -> TriagePlaybookRe
 
     debugging_steps = suggested_debugging_steps(payload.check_type, payload.table_id)
     sql_checks = [
-        SqlCheck(title=check.title, sql=check.sql)
+        SqlCheck(title=check.title, purpose=check.purpose, sql=check.sql)
         for check in suggested_sql_checks(payload.check_type, payload.table_id)
     ]
     owner_recommendation = (

@@ -334,6 +334,13 @@ export function AskLoupePanel({
           <div className="chat-empty">
             <Sparkles size={18} />
             <p>{disabledMessage}</p>
+            {samplePrompts.length > 0 && (
+              <div className="chat-chip-row" aria-disabled="true">
+                {samplePrompts.map((p) => (
+                  <button type="button" key={p} className="chat-chip" disabled title="Select an incident to ask this">{p}</button>
+                ))}
+              </div>
+            )}
           </div>
         ) : messages.length === 0 ? (
           <div className="chat-empty">
@@ -408,6 +415,34 @@ export function CodeBlock({ title, code, badge }: { title?: string; code: string
       </div>
       <pre className="code-block-pre"><code>{code}</code></pre>
     </div>
+  );
+}
+
+// --- Step-by-step debugging playbook workflow -----------------------------
+// Presentation-only: renders a numbered investigation workflow from steps
+// the calling app already computed (title + purpose + suggested SQL, e.g.
+// from apps/data_quality_triage/sql_checks.py via the /playbook endpoint).
+// Each step's SQL renders through CodeBlock with the same "Suggested -- not
+// executed" badge, so nothing here ever implies a query has actually run.
+export type PlaybookStepItem = { title: string; purpose: string; sql: string };
+
+export function PlaybookWorkflow({ steps, badge = "Suggested — not executed" }: { steps: PlaybookStepItem[]; badge?: string }) {
+  if (!steps.length) return null;
+  return (
+    <ol className="playbook-workflow">
+      {steps.map((step, i) => (
+        <li className="playbook-step" key={step.title}>
+          <div className="playbook-step-head">
+            <span className="playbook-step-number">{i + 1}</span>
+            <div className="playbook-step-headtext">
+              <div className="playbook-step-title">{step.title}</div>
+              <div className="playbook-step-purpose muted small">{step.purpose}</div>
+            </div>
+          </div>
+          <CodeBlock code={step.sql} badge={badge} />
+        </li>
+      ))}
+    </ol>
   );
 }
 
