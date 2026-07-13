@@ -5,6 +5,7 @@ from typing import Any
 from api.models import (
     CatalogMetric,
     ChangeRiskItem,
+    CompletenessCheckItem,
     ContractAlignment,
     GovernanceCatalogResponse,
     GovernanceRecommendation,
@@ -15,7 +16,9 @@ from api.models import (
 from apps.metric_governance.persistence import read_catalog, source_health_for_definition
 from apps.metric_governance.remediation import (
     derive_change_risk,
+    derive_governance_completeness,
     derive_governance_recommendations,
+    governance_completeness_score,
     trust_score_inputs_from_review,
 )
 from apps.metric_governance.review import review_sql
@@ -54,6 +57,8 @@ def _catalog_metric(client: Any, item: MetricDefinition, *, with_evidence: bool 
         source_health = evidence.worst_health.status if evidence.worst_health else None
         active_incident_ids = [incident.incident_id for incident in evidence.active_incidents]
 
+    completeness = derive_governance_completeness(item, source_health or "unknown", active_incident_ids)
+
     return CatalogMetric(
         name=item.name,
         version=item.version,
@@ -69,6 +74,8 @@ def _catalog_metric(client: Any, item: MetricDefinition, *, with_evidence: bool 
         last_reviewed_at=item.last_reviewed_at,
         source_health=source_health,
         active_incident_ids=active_incident_ids,
+        completeness=[CompletenessCheckItem(label=c.label, passed=c.passed, detail=c.detail) for c in completeness],
+        completeness_score=governance_completeness_score(completeness),
     )
 
 
@@ -106,6 +113,7 @@ def build_governance_review(client: Any, sql: str, metric_name: str) -> Governan
         source_status=source_status,
         active_incident_ids=active_incident_ids,
     )
+    completeness = derive_governance_completeness(definition, source_status, active_incident_ids)
 
     return GovernanceReviewResponse(
         metric=CatalogMetric(
@@ -123,6 +131,8 @@ def build_governance_review(client: Any, sql: str, metric_name: str) -> Governan
             last_reviewed_at=definition.last_reviewed_at,
             source_health=source_status,
             active_incident_ids=active_incident_ids,
+            completeness=[CompletenessCheckItem(label=c.label, passed=c.passed, detail=c.detail) for c in completeness],
+            completeness_score=governance_completeness_score(completeness),
         ),
         review_score=review.score,
         summary=review.summary,

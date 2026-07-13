@@ -619,6 +619,42 @@ export function RecommendationCards({ title, items, emptyLabel }: { title?: stri
   );
 }
 
+// --- Governance completeness checklist --------------------------------------
+// Presentation-only: renders the fixed governance-completeness checks the
+// calling app already computed (e.g. Governance's CatalogMetric.completeness
+// / completeness_score, derived deterministically in
+// apps/metric_governance/remediation.py's derive_governance_completeness()).
+// This component never decides pass/fail itself -- it only renders the
+// boolean/detail pairs it's given, plus the already-computed score.
+export type CompletenessCheckItem = { label: string; passed: boolean; detail: string };
+
+export function CompletenessChecklist({ items, score }: { items: CompletenessCheckItem[]; score?: number }) {
+  if (!items.length) return null;
+  const passedCount = items.filter((it) => it.passed).length;
+  return (
+    <div className="completeness-checklist">
+      {typeof score === "number" && (
+        <div className="completeness-score-row">
+          <span className="completeness-score-label">Governance completeness</span>
+          <span className="completeness-score-value">{Math.round(score * 100)}%</span>
+          <span className="completeness-score-count muted small">{passedCount} of {items.length} checks passed</span>
+        </div>
+      )}
+      <div className="completeness-rows">
+        {items.map((it) => (
+          <div className={`completeness-row completeness-row-${it.passed ? "pass" : "fail"}`} key={it.label}>
+            <span className={`completeness-mark completeness-mark-${it.passed ? "pass" : "fail"}`}>{it.passed ? "✓" : "✕"}</span>
+            <div className="completeness-row-text">
+              <span className="completeness-row-label">{it.label}</span>
+              <span className="completeness-row-detail muted small">{it.detail}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // --- Simple selectable list --------------------------------------------------
 // Generic presentation-only selector row list -- a name, an optional muted
 // meta string, and a selected state -- for any calling app that needs "pick

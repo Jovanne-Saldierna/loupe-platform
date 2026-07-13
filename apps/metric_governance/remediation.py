@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from apps.metric_governance.models import (
     ChangeRiskCategory,
+    CompletenessCheck,
     GovernanceRecommendationItem,
     SqlReviewFinding,
     SqlReviewResult,
@@ -329,3 +330,88 @@ def derive_governance_recommendations(
         )
 
     return recs
+
+
+# ---------------------------------------------------------------------------
+# Governance completeness -- seven fixed rules (Steward Summary's
+# "Consistency Checks" requirement), each a direct boolean read of a
+# MetricDefinition field or already-resolved source-health/incident
+# evidence. Always returned in the same order; nothing here is a
+# subjective judgment, a guess, or an AI narration -- explanations.py or
+# Ask Loupe may narrate *why* a failed check matters, but never decides
+# pass/fail itself.
+# ---------------------------------------------------------------------------
+
+
+def derive_governance_completeness(
+    definition: MetricDefinition,
+    source_status: str,
+    active_incident_ids: list[str],
+) -> list[CompletenessCheck]:
+    checks: list[CompletenessCheck] = []
+
+    has_owner = bool(definition.owner and definition.owner.strip())
+    checks.append(CompletenessCheck(
+        "Has owner", has_owner,
+        f"Owner on file: {definition.owner}." if has_owner else "No owner is assigned in the catalog.",
+    ))
+
+    is_certified = definition.certification_status == "certified"
+    checks.append(CompletenessCheck(
+        "Has certified definition", is_certified,
+        f"Certification status is \"{definition.certification_status}\".",
+    ))
+
+    has_grain = bool(definition.measurement_grain and definition.measurement_grain.strip())
+    checks.append(CompletenessCheck(
+        "Has declared grain", has_grain,
+        f"Measurement grain: \"{definition.measurement_grain}\"." if has_grain else "No measurement grain declared.",
+    ))
+
+    has_tables = bool(definition.approved_source_tables)
+    checks.append(CompletenessCheck(
+        "Has approved source tables", has_tables,
+        f"{len(definition.approved_source_tables)} approved source table(s) on file."
+        if has_tables else "No approved source tables on file.",
+    ))
+
+    freshness = (definition.freshness_expectation or "").strip()
+    has_freshness = bool(freshness) and "undeclared" not in freshness.lower()
+    checks.append(CompletenessCheck(
+        "Has freshness/SLA expectation", has_freshness,
+        f"Freshness expectation: \"{definition.freshness_expectation}\"."
+        if has_freshness else "No freshness/SLA expectation declared.",
+    ))
+
+    has_downstream = bool(definition.downstream_dashboards)
+    checks.append(CompletenessCheck(
+        "Has downstream usage documented", has_downstream,
+        f"{len(definition.downstream_dashboards)} downstream dashboard(s)/report(s) on file."
+        if has_downstream else "No downstream usage documented.",
+    ))
+
+    no_blocking_incident = not active_incident_ids and source_status not in ("degraded", "critical")
+    if active_incident_ids:
+        incident_detail = (
+            f"{len(active_incident_ids)} active incident(s) on this metric's source tables: "
+            + ", ".join(active_incident_ids) + "."
+        )
+    elif source_status in ("degraded", "critical"):
+        incident_detail = f"Source health is \"{source_status}\"."
+    elif source_status == "unknown":
+        incident_detail = "Source health could not be resolved."
+    else:
+        incident_detail = "No active incidents; source health is healthy."
+    checks.append(CompletenessCheck("No active incident blocking trust", no_blocking_incident, incident_detail))
+
+    return checks
+
+
+def governance_completeness_score(checks: list[CompletenessCheck]) -> float:
+    """Fraction of `checks` that passed, rounded to 4 decimal places --
+    0.0 for an empty list rather than a division error or a fabricated
+    default score."""
+
+    if not checks:
+        return 0.0
+    return round(sum(1 for c in checks if c.passed) / len(checks), 4)

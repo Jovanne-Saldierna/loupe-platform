@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from apps.metric_governance.models import ChangeRiskCategory, SqlReviewFinding, SqlReviewResult
+from apps.metric_governance.models import ChangeRiskCategory, CompletenessCheck, SqlReviewFinding, SqlReviewResult
 from apps.metric_governance.remediation import (
     derive_change_risk,
+    derive_governance_completeness,
     derive_governance_recommendations,
+    governance_completeness_score,
     suggested_playbooks_for_review,
     trust_score_inputs_from_review,
 )
@@ -305,3 +307,109 @@ def test_duplicate_action_labels_are_not_repeated():
     actions = [r.action for r in recs]
     assert actions.count("Update documentation") == 1
     assert len(actions) == len(set(actions))
+
+
+# ---------------------------------------------------------------------------
+# derive_governance_completeness / governance_completeness_score
+# ---------------------------------------------------------------------------
+
+
+def _complete_definition(**overrides) -> MetricDefinition:
+    defaults = dict(
+        name="revenue", owner="Analytics", description="Revenue", formula="SUM(sale_price)",
+        measurement_grain="order_item", freshness_expectation="daily", certification_status="certified",
+        approved_source_tables=["order_items"], version="v1-certified",
+        downstream_dashboards=["loupe_agent dashboard: KPI summary"],
+    )
+    defaults.update(overrides)
+    return MetricDefinition(**defaults)
+
+
+def _checks_by_label(checks: list[CompletenessCheck]) -> dict[str, CompletenessCheck]:
+    return {c.label: c for c in checks}
+
+
+def test_completeness_returns_seven_fixed_checks_in_order():
+    checks = derive_governance_completeness(_complete_definition(), "healthy", [])
+    assert [c.label for c in checks] == [
+        "Has owner",
+        "Has certified definition",
+        "Has declared grain",
+        "Has approved source tables",
+        "Has freshness/SLA expectation",
+        "Has downstream usage documented",
+        "No active incident blocking trust",
+    ]
+
+
+def test_fully_governed_metric_passes_every_check():
+    checks = derive_governance_completeness(_complete_definition(), "healthy", [])
+    assert all(c.passed for c in checks)
+    assert governance_completeness_score(checks) == 1.0
+
+
+def test_missing_owner_fails_owner_check():
+    checks = derive_governance_completeness(_complete_definition(owner=""), "healthy", [])
+    by_label = _checks_by_label(checks)
+    assert by_label["Has owner"].passed is False
+
+
+def test_uncertified_definition_fails_certification_check():
+    checks = derive_governance_completeness(_complete_definition(certification_status="proposed"), "healthy", [])
+    by_label = _checks_by_label(checks)
+    assert by_label["Has certified definition"].passed is False
+
+
+def test_missing_grain_fails_grain_check():
+    checks = derive_governance_completeness(_complete_definition(measurement_grain=""), "healthy", [])
+    by_label = _checks_by_label(checks)
+    assert by_label["Has declared grain"].passed is False
+
+
+def test_no_approved_tables_fails_tables_check():
+    checks = derive_governance_completeness(_complete_definition(approved_source_tables=[]), "healthy", [])
+    by_label = _checks_by_label(checks)
+    assert by_label["Has approved source tables"].passed is False
+
+
+def test_undeclared_freshness_fails_freshness_check():
+    checks = derive_governance_completeness(_complete_definition(freshness_expectation="undeclared"), "healthy", [])
+    by_label = _checks_by_label(checks)
+    assert by_label["Has freshness/SLA expectation"].passed is False
+
+
+def test_no_downstream_usage_fails_downstream_check():
+    checks = derive_governance_completeness(_complete_definition(downstream_dashboards=[]), "healthy", [])
+    by_label = _checks_by_label(checks)
+    assert by_label["Has downstream usage documented"].passed is False
+
+
+def test_active_incidents_fail_the_incident_check():
+    checks = derive_governance_completeness(_complete_definition(), "healthy", ["inc-1"])
+    by_label = _checks_by_label(checks)
+    assert by_label["No active incident blocking trust"].passed is False
+    assert "inc-1" in by_label["No active incident blocking trust"].detail
+
+
+def test_degraded_source_health_fails_incident_check_even_with_no_open_incidents():
+    checks = derive_governance_completeness(_complete_definition(), "degraded", [])
+    by_label = _checks_by_label(checks)
+    assert by_label["No active incident blocking trust"].passed is False
+
+
+def test_unknown_source_health_with_no_incidents_passes_incident_check():
+    # "unknown" is not evidence of a problem -- it means health couldn't be
+    # resolved, which must not be conflated with an active/degraded risk.
+    checks = derive_governance_completeness(_complete_definition(), "unknown", [])
+    by_label = _checks_by_label(checks)
+    assert by_label["No active incident blocking trust"].passed is True
+
+
+def test_completeness_score_is_fraction_passed():
+    checks = derive_governance_completeness(_complete_definition(owner="", certification_status="proposed"), "healthy", [])
+    score = governance_completeness_score(checks)
+    assert score == round(5 / 7, 4)
+
+
+def test_completeness_score_of_empty_list_is_zero():
+    assert governance_completeness_score([]) == 0.0

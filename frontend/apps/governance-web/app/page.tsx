@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Copy, GitBranch, GitCompare, Library, ListChecks, ScanText, Sparkles, ShieldCheck, TriangleAlert } from "lucide-react";
+import { CheckCircle2, Copy, FileText, GitBranch, GitCompare, Library, ListChecks, ScanText, Sparkles, ShieldCheck, TriangleAlert } from "lucide-react";
 import {
   ActionFeed, AppShell, AskLoupePanel, AssetImpactList, Badge, Card, ChangeRiskList, ChipList, CodeBlock,
-  FactPairGrid, ReasoningBreakdown, RecommendationCards, RecommendationList, SectionCard, SimpleList, Unavailable,
+  CompletenessChecklist, FactPairGrid, ReasoningBreakdown, RecommendationCards, RecommendationList, SectionCard,
+  SimpleList, Unavailable,
 } from "@loupe/ui";
-import type { ChangeRiskCategory, FeedPriority, GovernanceRecommendationItem, HelperMessage } from "@loupe/ui";
+import type { ChangeRiskCategory, CompletenessCheckItem, FeedPriority, GovernanceRecommendationItem, HelperMessage } from "@loupe/ui";
 
 type Metric={
   name:string;version:string;certification_status:string;measurement_grain:string;
   owner:string|null;description:string|null;formula:string|null;approved_source_tables:string[];
   freshness_expectation:string|null;downstream_dashboards:string[];required_filters:string[];
   last_reviewed_at:string|null;source_health:string|null;active_incident_ids:string[];
+  completeness:CompletenessCheckItem[];completeness_score:number;
 };
 type TrustFactor={name:string;points:number;reason:string};
 type Review={
@@ -22,7 +24,7 @@ type Review={
   override_reason:string|null;alignment:{contract:string;expected:string;observed:string;status:string}[];
   downstream_assets:string[];change_risk:ChangeRiskCategory[];recommendations:GovernanceRecommendationItem[];
 };
-type GovernanceView = "catalog" | "sqlReview" | "metricAlignment" | "definitionDiff" | "impact" | "recommendations";
+type GovernanceView = "catalog" | "sqlReview" | "metricAlignment" | "definitionDiff" | "impact" | "recommendations" | "stewardSummary";
 
 // Per the product-depth pass: these should read as questions a reviewer
 // actually asks before approving a metric for reporting, not generic
@@ -32,6 +34,17 @@ const HELPER_PROMPTS = [
   "What changed from the governed definition?",
   "What downstream assets are affected?",
   "What should I fix before approval?",
+];
+
+// Steward Summary's own suggested prompts -- documentation/stakeholder
+// framing, distinct from SQL Review's score-focused prompts above, per the
+// steward-output pass. Shares the same Ask Loupe backend endpoint and
+// grounding contract; only the suggestions shown differ.
+const STEWARD_HELPER_PROMPTS = [
+  "Draft a governance summary for this metric.",
+  "What should I tell stakeholders?",
+  "What needs to happen before approval?",
+  "What documentation is missing?",
 ];
 
 // A realistic, reviewable starter query against the same governed ecommerce
@@ -64,6 +77,39 @@ function certBadgeTone(status: string): "accent" | "neutral" | "warning" {
   return status === "certified" ? "accent" : "warning";
 }
 
+// Formats the "copyable governance brief" block from fields the app already
+// has on screen -- the same metric-card and (when present) review fields
+// rendered elsewhere on this page, arranged into the example structure
+// (Metric/Owner/Status/.../Recommended next step). This is pure string
+// formatting, never a new judgment: it picks no score, no recommendation,
+// no risk that wasn't already deterministically computed by the backend.
+function buildGovernanceBrief(metric: Metric, review: Review | null): string {
+  const reviewMatches = review !== null && review.metric.name === metric.name;
+  const lines: string[] = [
+    `Metric: ${metric.name}`,
+    `Owner: ${metric.owner || "Unassigned"}`,
+    `Status: ${metric.certification_status.replaceAll("_"," ")}`,
+    `Certified definition: ${metric.formula || "No formula on file."}`,
+    `Approved sources: ${metric.approved_source_tables.length?metric.approved_source_tables.join(", "):"None on file"}`,
+    `Downstream assets: ${metric.downstream_dashboards.length?metric.downstream_dashboards.join("; "):"None on file"}`,
+  ];
+  if (reviewMatches && review) {
+    lines.push(`Current review outcome: Trust score ${review.trust_score}/100 (${review.trust_band.replaceAll("_"," ")}) -- ${review.summary}`);
+    const risks = review.change_risk.filter(c=>c.status==="risk").map(c=>`${c.category}: ${c.detail}`);
+    const incidentNote = review.active_incident_ids.length?`Active incidents: ${review.active_incident_ids.join(", ")}.`:null;
+    const riskLines = [...risks, ...(incidentNote?[incidentNote]:[])];
+    lines.push(`Risks: ${riskLines.length?riskLines.join(" | "):"None identified in this review."}`);
+    const topRec = review.recommendations[0];
+    lines.push(`Recommended next step: ${topRec?`${topRec.action} -- ${topRec.rationale}`:"No recommendation generated yet."}`);
+  } else {
+    const incidentNote = metric.active_incident_ids.length?`Active incidents: ${metric.active_incident_ids.join(", ")}.`:null;
+    lines.push("Current review outcome: No SQL review run yet for this metric.");
+    lines.push(`Risks: ${incidentNote||"No SQL review run yet -- run one in SQL Review to surface change risk."}`);
+    lines.push("Recommended next step: Run a SQL review in SQL Review to get a deterministic governance decision.");
+  }
+  return lines.join("\n");
+}
+
 export default function Page(){
   const api=process.env.NEXT_PUBLIC_API_BASE_URL??"http://localhost:8000";
   const [metrics,setMetrics]=useState<Metric[]>([]); const [metric,setMetric]=useState(""); const [sql,setSql]=useState(""); const [reviewedSql,setReviewedSql]=useState(""); const [review,setReview]=useState<Review|null>(null); const [error,setError]=useState<string|null>(null); const [running,setRunning]=useState(false);
@@ -91,6 +137,7 @@ export default function Page(){
         recommended_next_steps:review.recommended_next_steps,referenced_tables:review.referenced_tables,
         source_health:review.source_health,active_incident_ids:review.active_incident_ids,override_reason:review.override_reason,
         downstream_assets:review.downstream_assets,change_risk:review.change_risk,recommendations:review.recommendations,
+        completeness:review.metric.completeness,
       })});
       const body=await response.json();
       const answer=response.ok?body.answer:body.detail??"Loupe could not produce a grounded answer right now.";
@@ -108,6 +155,7 @@ export default function Page(){
     {label:"Definition Diff",icon:TriangleAlert,active:activeView==="definitionDiff",onClick:()=>setActiveView("definitionDiff")},
     {label:"Impact",icon:GitBranch,active:activeView==="impact",onClick:()=>setActiveView("impact")},
     {label:"Recommendations",icon:ListChecks,active:activeView==="recommendations",onClick:()=>setActiveView("recommendations")},
+    {label:"Steward Summary",icon:FileText,active:activeView==="stewardSummary",onClick:()=>setActiveView("stewardSummary")},
   ];
   return <AppShell active="governance" brand="Governance" brandIcon={ShieldCheck} navigation={nav}>
     <div className="dashboard-surface">
@@ -179,6 +227,55 @@ export default function Page(){
         {review?<SectionCard icon={ListChecks} title="What to do next" description={`${review.metric.name} · derived from the deterministic review`}>
           <RecommendationCards items={review.recommendations} emptyLabel="No recommendations generated yet."/>
         </SectionCard>:<Card><div className="empty-review"><ListChecks size={24}/><strong>No review yet</strong><span className="muted small">Run a review in SQL Review to see governance recommendations.</span></div></Card>}
+      </section>}
+
+      {activeView==="stewardSummary"&&<section><div className="section-title">Steward summary</div>
+        {selectedCatalogMetric?<>
+          <SectionCard icon={FileText} title={`${selectedCatalogMetric.name} · Metric card`} description="What this metric means and where it's used" action={<Badge tone={certBadgeTone(selectedCatalogMetric.certification_status)}>{selectedCatalogMetric.certification_status.replaceAll("_"," ")}</Badge>}>
+            <p>{selectedCatalogMetric.description||"No business definition on file."}</p>
+            <FactPairGrid items={[
+              {label:"Owner",value:selectedCatalogMetric.owner||"Unassigned"},
+              {label:"Grain",value:selectedCatalogMetric.measurement_grain},
+              {label:"Freshness expectation",value:selectedCatalogMetric.freshness_expectation||"Undeclared"},
+              {label:"Version",value:selectedCatalogMetric.version},
+            ]}/>
+            <ChipList title="Approved source tables" items={selectedCatalogMetric.approved_source_tables} emptyLabel="No approved source tables on file."/>
+            <AssetImpactList title="Downstream dashboards &amp; reports" items={selectedCatalogMetric.downstream_dashboards} emptyLabel="No downstream dashboards or reports on file."/>
+            <ChipList title={selectedCatalogMetric.active_incident_ids.length?`Active incident exposure (${selectedCatalogMetric.active_incident_ids.length})`:"Active incident exposure"} items={selectedCatalogMetric.active_incident_ids} tone="down" emptyLabel="No active incidents on this metric's source tables."/>
+            {selectedCatalogMetric.source_health&&<div className="confidence-rows"><div className="confidence-row"><span>Current trust posture · source health</span><Badge tone={selectedCatalogMetric.source_health==="healthy"?"accent":"warning"}>{selectedCatalogMetric.source_health}</Badge></div></div>}
+          </SectionCard>
+
+          <SectionCard icon={ListChecks} title="Governance completeness" description="Deterministic checklist -- not affected by Ask Loupe">
+            <CompletenessChecklist items={selectedCatalogMetric.completeness} score={selectedCatalogMetric.completeness_score}/>
+          </SectionCard>
+
+          {review&&review.metric.name===selectedCatalogMetric.name?<SectionCard icon={ShieldCheck} title="Governance decision summary" description={`Deterministic · ${review.scoring_version}`} action={<Badge tone={review.trust_band==="high_trust"?"accent":review.trust_band==="do_not_rely"?"warning":"neutral"}>{review.trust_band.replaceAll("_"," ")}</Badge>}>
+            <FactPairGrid items={[{label:"Trust score",value:`${review.trust_score}/100`},{label:"Review score",value:`${review.review_score}/100`}]}/>
+            <p>{review.summary}</p>
+            {review.trust_factors.length>0&&<ReasoningBreakdown items={review.trust_factors.map(f=>({label:f.name,points:f.points,reason:f.reason}))}/>}
+            <ChangeRiskList items={review.change_risk} emptyLabel="No change-risk categories available yet."/>
+            <RecommendationCards title="Recommended decision" items={review.recommendations} emptyLabel="No recommendations generated yet."/>
+          </SectionCard>:<Card><div className="empty-review"><ShieldCheck size={22}/><strong>No review run yet for this metric</strong><span className="muted small">Run a review in SQL Review to see the full governance decision summary in the brief below.</span></div></Card>}
+
+          <SectionCard icon={Copy} title="Copyable governance brief" description="Paste into a ticket, PRD, Slack update, or metric registry note">
+            <CodeBlock title="Governance brief" code={buildGovernanceBrief(selectedCatalogMetric, review)} badge={review&&review.metric.name===selectedCatalogMetric.name?"Includes latest review":"Metric card only"}/>
+          </SectionCard>
+
+          <div className="section-title">Loupe AI helper</div>
+          <AskLoupePanel
+            title="Ask Loupe"
+            status={review&&review.metric.name===selectedCatalogMetric.name?`Grounded in this review · trust score ${review.trust_score}`:"Run a review to ground the helper"}
+            messages={helperMessages}
+            question={helperQuestion}
+            onQuestionChange={setHelperQuestion}
+            onAsk={askHelper}
+            asking={helperAsking}
+            disabled={!review||review.metric.name!==selectedCatalogMetric.name}
+            disabledMessage="Run a review for this metric in SQL Review, then ask Loupe to draft a summary or explain what's missing."
+            placeholder="Ask Loupe to draft a summary or explain what's needed before approval…"
+            samplePrompts={STEWARD_HELPER_PROMPTS}
+          />
+        </>:<Card><div className="empty-review"><FileText size={24}/><strong>No metric selected</strong><span className="muted small">Select a metric in Catalog to see its steward summary.</span></div></Card>}
       </section>}
     </div>
   </AppShell>;

@@ -133,6 +133,16 @@ class ErrorResponse(BaseModel):
     detail: str = Field(description="Safe user-facing error without raw infrastructure details")
 
 
+class CompletenessCheckItem(BaseModel):
+    """One governance-completeness rule result -- see
+    apps/metric_governance/remediation.py's derive_governance_completeness().
+    Deterministic pass/fail, never an AI judgment."""
+
+    label: str
+    passed: bool
+    detail: str
+
+
 class CatalogMetric(BaseModel):
     name: str
     version: str
@@ -157,6 +167,10 @@ class CatalogMetric(BaseModel):
     # just the metric currently under review.
     source_health: Optional[str] = None
     active_incident_ids: list[str] = Field(default_factory=list)
+    # Steward Summary's governance-completeness checklist -- see
+    # apps/metric_governance/remediation.py's derive_governance_completeness().
+    completeness: list[CompletenessCheckItem] = Field(default_factory=list)
+    completeness_score: float = 0.0
 
 
 class GovernanceCatalogResponse(BaseModel):
@@ -256,6 +270,7 @@ class GovernanceHelperRequest(BaseModel):
     downstream_assets: list[str] = Field(default_factory=list)
     change_risk: list[ChangeRiskItem] = Field(default_factory=list)
     recommendations: list[GovernanceRecommendation] = Field(default_factory=list)
+    completeness: list[CompletenessCheckItem] = Field(default_factory=list)
 
 
 class GovernanceHelperResponse(BaseModel):

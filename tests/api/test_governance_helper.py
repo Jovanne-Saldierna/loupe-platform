@@ -1,6 +1,7 @@
 from api.models import (
     CatalogMetric,
     ChangeRiskItem,
+    CompletenessCheckItem,
     GovernanceHelperRequest,
     GovernanceRecommendation,
     ReviewFinding,
@@ -124,3 +125,23 @@ def test_helper_summary_omits_new_sections_when_not_supplied(monkeypatch):
     assert "Downstream dashboards/reports on file" not in summary
     assert "Definition-change risk categories" not in summary
     assert "Governance recommendations already surfaced" not in summary
+    assert "Governance completeness checks" not in summary
+
+
+def test_helper_summary_includes_completeness_checks(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        governance_helper,
+        "ask_dashboard",
+        lambda question, state_summary: captured.setdefault("state_summary", state_summary) or "ok",
+    )
+
+    governance_helper.answer_governance_question(_payload(completeness=[
+        CompletenessCheckItem(label="Has owner", passed=True, detail="Owner on file: Analytics."),
+        CompletenessCheckItem(label="Has certified definition", passed=False, detail="Certification status is \"proposed\"."),
+    ]))
+
+    summary = captured["state_summary"]
+    assert "Governance completeness checks:" in summary
+    assert "- PASS Has owner: Owner on file: Analytics." in summary
+    assert "- FAIL Has certified definition: Certification status is \"proposed\"." in summary

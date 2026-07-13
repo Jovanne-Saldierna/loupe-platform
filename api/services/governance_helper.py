@@ -71,6 +71,11 @@ def _summarize_review_for_helper(payload: GovernanceHelperRequest) -> str:
         for rec in payload.recommendations:
             lines.append(f"- [{rec.priority}] {rec.action}: {rec.rationale}")
 
+    if payload.completeness:
+        lines.append("Governance completeness checks:")
+        for check in payload.completeness:
+            lines.append(f"- {'PASS' if check.passed else 'FAIL'} {check.label}: {check.detail}")
+
     return "\n".join(lines)
 
 

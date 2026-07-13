@@ -100,3 +100,17 @@ class GovernanceRecommendationItem:
     action: str
     rationale: str
     priority: RecommendationPriority
+
+
+@dataclass(frozen=True)
+class CompletenessCheck:
+    """One governance-completeness rule check for a metric (Steward
+    Summary's "Consistency Checks" requirement) -- see remediation.py's
+    derive_governance_completeness(). `passed` and `detail` are both
+    derived directly from the governed MetricDefinition's own fields plus
+    already-resolved source health/incident evidence; nothing here is a
+    subjective judgment or an AI narration."""
+
+    label: str
+    passed: bool
+    detail: str

@@ -141,3 +141,34 @@ def test_list_governed_metrics_returns_rich_catalog_detail_with_evidence(monkeyp
     assert metric.downstream_dashboards == ["loupe_agent dashboard: KPI summary"]
     assert metric.source_health == "healthy"
     assert metric.active_incident_ids == []
+
+
+def test_list_governed_metrics_returns_governance_completeness(monkeypatch):
+    definition = _definition(certification_status="certified", downstream_dashboards=["loupe_agent dashboard: KPI summary"])
+    monkeypatch.setattr(governance_review, "read_catalog", lambda client: _Catalog([definition]))
+    monkeypatch.setattr(
+        governance_review,
+        "source_health_for_definition",
+        lambda client, d: _Evidence(SourceHealth(dataset="thelook_ecommerce", table_id="order_items", status="healthy"), []),
+    )
+    response = governance_review.list_governed_metrics(object())
+    metric = response.metrics[0]
+
+    assert len(metric.completeness) == 7
+    assert all(c.passed for c in metric.completeness)
+    assert metric.completeness_score == 1.0
+
+
+def test_review_response_metric_carries_completeness_reflecting_review_evidence(monkeypatch):
+    definition = _definition(certification_status="proposed")
+    monkeypatch.setattr(governance_review, "read_catalog", lambda client: _Catalog([definition]))
+    monkeypatch.setattr(
+        governance_review,
+        "source_health_for_definition",
+        lambda client, d: _Evidence(SourceHealth(dataset="thelook_ecommerce", table_id="order_items", status="healthy"), []),
+    )
+    result = governance_review.build_governance_review(object(), "SELECT SUM(sale_price) FROM order_items", "revenue")
+
+    labels = {c.label: c.passed for c in result.metric.completeness}
+    assert labels["Has certified definition"] is False
+    assert 0.0 < result.metric.completeness_score < 1.0
