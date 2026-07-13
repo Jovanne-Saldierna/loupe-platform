@@ -230,7 +230,6 @@ export default function Page(){
         </section>}
 
         {activeView==="playbook"&&<section><div className="section-title">AI-generated triage playbook</div>
-        <div className="playbook-layout">
         <SectionCard icon={BookOpen} title="Triage playbook" description={selectedSubtitle} action={selected&&<button className="button" onClick={generatePlaybook} disabled={playbookLoading}>{playbookLoading?"Generating…":playbook?"Regenerate":"Generate playbook"}</button>}>
           {!selected?<div className="empty-review"><BookOpen size={24}/><strong>No incident selected</strong><span className="muted small">Select an incident in Source Health or Incident Queue to generate a grounded triage playbook.</span></div>
           :playbookError?<Unavailable message={playbookError}/>
@@ -258,7 +257,6 @@ export default function Page(){
             rowLimit={sandboxResult?.row_limit??25}
           />}
         </SectionCard>
-        </div>
         </section>}
 
         {activeView==="lineage"&&<section><div className="section-title">Lineage &amp; downstream impact</div>

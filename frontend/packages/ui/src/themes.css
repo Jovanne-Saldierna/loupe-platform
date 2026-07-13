@@ -116,18 +116,6 @@
 .queue-empty { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 90px; color: var(--muted-foreground); }
 @media (max-width: 560px) { .health-row { grid-template-columns: minmax(100px, 140px) 1fr; } .status-dot { grid-column: 2; } }
 
-/* --- Triage desktop/landscape hardening -----------------------------------
-   Everything below is scoped to .product-triage only, so Loupe Commerce and
-   Metric Governance are unaffected. The default .workspace cap (1440px)
-   left a visibly empty gap next to the sidebar on wide desktop/landscape
-   monitors, with single-column tabs (Lineage, Audit Trail) reading as a
-   small cluster inside an oversized card. Widening + centering the whole
-   canvas (same pattern .product-loupe already uses) and adding a little
-   vertical rhythm between a tab's direct sections fixes both without any
-   data or component-logic change. */
-.product-triage { max-width: 1680px; margin: 0 auto; }
-.product-triage section > * + * { margin-top: 16px; }
-
 /* Ask Loupe input contrast (dark theme): .chat-input-dock keeps a hardcoded
    white pill (by design, so the composer reads the same across all three
    themed apps), but .product-triage redeclares --foreground to a near-white
@@ -146,59 +134,29 @@
    were a full-width bar per asset (badge + label, lots of empty trailing
    space) -- tile them into a responsive grid instead so several short asset
    names sit side by side and the whole card fits in one screenshot. */
+/* Selected-incident facts card (Incident Queue): AssetImpactList's rows
+   were a full-width bar per asset (badge + label, lots of empty trailing
+   space) -- tile them into a responsive grid instead so several short asset
+   names sit side by side. Contained entirely within the card's own width
+   (auto-fill, not a fixed track count), so it never stretches the page --
+   with few assets it just leaves normal card padding, same as before. */
 .product-triage .asset-impact-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
 .product-triage .asset-impact-row { align-items: flex-start; }
 
-/* Playbook + SQL sandbox: side-by-side on wide screens instead of stacked,
-   so the tab reads as one screenshot-able workspace instead of a very tall
-   scroll. Falls back to the existing stacked layout below 1100px. Wraps
-   the same two <SectionCard>s already rendered in page.tsx -- no change to
-   playbook generation, SQL checks, or sandbox behavior. */
-.product-triage .playbook-layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(360px, 1fr); gap: 24px; align-items: start; }
-@media (max-width: 1100px) { .product-triage .playbook-layout { grid-template-columns: 1fr; } }
-
-/* Lineage: source table -> governed metric -> downstream asset. Was a
-   single flex column of rows that read as a thin list inside a very wide
-   card; tiling each source table into its own bordered card in a
-   responsive grid uses wide space and keeps each chain easy to scan.
-   Same LineageChain component/props/data -- CSS only. */
-.product-triage .lineage-chain { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; align-items: start; }
-.product-triage .lineage-row {
-  flex-direction: column; align-items: stretch; gap: 8px; background: var(--card);
-  border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px;
-}
-.product-triage .lineage-metric-group { padding-left: 10px; border-left: 2px solid var(--accent-soft); }
-.product-triage .lineage-node-asset { white-space: normal; }
-
-/* Audit trail: denser row padding plus a connecting line between dots so
-   the trail reads as one continuous timeline instead of loosely spaced
-   rows with empty space on wide screens. Timestamps get a fixed-width
-   right-aligned column so they line up down the page instead of trailing
-   at whatever width each description happens to wrap to. Same
-   AuditTrailList component/data -- CSS only. */
-.product-triage .audit-trail-row { padding: 10px 0; position: relative; }
-.product-triage .audit-trail-dot { position: relative; }
-.product-triage .audit-trail-row:not(:last-child) .audit-trail-dot::after {
-  content: ""; position: absolute; left: 3px; top: 13px; width: 1px; height: calc(100% + 2px); background: var(--border);
-}
-.product-triage .audit-trail-time { min-width: 150px; text-align: right; }
-
-@media (max-width: 1100px) {
-  .product-triage { max-width: none; }
-}
-
 /* --- Triage print/PDF: reclaim the sidebar's reserved grid track ----------
-   The shared @media print rule (styles.css) already hides .sidebar, but
-   .app-shell's fixed "280px minmax(0,1fr)" grid still reserved that 280px
-   track even with the sidebar gone, which is what compressed print/PDF
-   preview into a narrow left column. Collapsing the grid to one column and
-   removing the width caps reclaims that space for Triage only -- Loupe and
-   Governance's print output is unchanged. */
+   Strictly scoped inside @media print -- none of this applies to normal
+   browser view. The shared @media print rule (styles.css) already hides
+   .sidebar, but .app-shell's fixed "280px minmax(0,1fr)" grid still
+   reserved that 280px track even with the sidebar gone, which is what
+   compressed print/PDF preview into a narrow left column. Collapsing the
+   grid to one column and removing the width caps reclaims that space for
+   Triage's print output only -- Loupe and Governance are unaffected, and
+   normal screen layout for Triage is unaffected too. */
 @media print {
   .product-triage { max-width: none; padding: 8mm; }
   .product-triage .app-shell { grid-template-columns: 1fr; gap: 0; }
   .product-triage .workspace { max-width: none; padding: 0; }
-  .product-triage .triage-layout, .product-triage .playbook-layout { grid-template-columns: 1fr 1fr; }
+  .product-triage .triage-layout { grid-template-columns: 1fr 1fr; }
   .product-triage .card, .product-triage .section-card, .product-triage .hero-panel {
     box-shadow: none; break-inside: avoid; page-break-inside: avoid;
   }
