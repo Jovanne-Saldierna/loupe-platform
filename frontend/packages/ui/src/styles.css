@@ -842,6 +842,26 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .region-row-fill { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
 .region-row-value { text-align: right; font-size: 12.5px; font-weight: 650; white-space: nowrap; }
 
+/* --- Reasoning breakdown -------------------------------------------------
+   Generic factor/points/reason rows for any score that wants to explain its
+   own math (not tied to Governance's trust score specifically). */
+.reasoning-breakdown { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.reasoning-row { padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.reasoning-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.reasoning-row-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.reasoning-label { font-size: 13px; font-weight: 650; }
+.reasoning-points { font-size: 12px; font-weight: 650; padding: 1px 7px; border-radius: 999px; color: var(--accent); background: var(--accent-soft); white-space: nowrap; }
+.reasoning-reason { margin-top: 3px; }
+
+/* --- Recommendation list ---------------------------------------------------
+   Generic compact checklist for short recommendation/next-step strings --
+   distinct from ActionFeed, which needs a priority + metric per row. */
+.recommendation-list { margin-top: 12px; }
+.recommendation-list-title { font-size: 13px; font-weight: 650; margin-bottom: 8px; }
+.recommendation-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.recommendation-row { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.45; }
+.recommendation-row svg { color: var(--accent); flex: 0 0 auto; margin-top: 2px; }
+
 /* --- Data confidence strip ------------------------------------------------
    Trust metadata demoted to a quiet, full-width footer instead of a card in
    the prime right column -- smaller type, no border/shadow beyond a single

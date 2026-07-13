@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
-import { Activity, ShieldCheck, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
+import { Activity, CheckCircle2, ShieldCheck, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
 import "./styles.css";
 import "./themes.css";
 
@@ -176,6 +176,48 @@ export function MiniStatusCard({ icon: Icon, label, value, deltaLabel, status, t
       <div className="mini-card-head"><span className="mini-card-icon"><Icon size={13} /></span><span>{label}</span><span className={`mini-card-delta mini-card-delta-${tone}`}>{deltaLabel}</span></div>
       <div className="mini-card-value">{value}</div>
       <span className={`mini-card-status mini-card-status-${tone}`}>{status}</span>
+    </div>
+  );
+}
+
+// Generic "why this score" breakdown: a factor's name/label, its point
+// contribution, and a short reason -- for any calling app that computes a
+// score from named factors and wants to explain the math instead of just
+// showing the final number. Not tied to any one app's scoring model; the
+// calling app supplies pre-formatted label/points/reason per row.
+export function ReasoningBreakdown({ items }: { items: { label: string; points: number; reason: string }[] }) {
+  if (!items.length) return null;
+  return (
+    <div className="reasoning-breakdown">
+      {items.map((it) => (
+        <div className="reasoning-row" key={it.label}>
+          <div className="reasoning-row-head">
+            <span className="reasoning-label">{it.label}</span>
+            <span className="reasoning-points">{it.points > 0 ? `+${it.points}` : it.points}</span>
+          </div>
+          <div className="reasoning-reason muted small">{it.reason}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Generic compact checklist for a list of short recommended/next-step
+// strings -- distinct from ActionFeed, which requires a priority + icon +
+// metric per row that doesn't fit a plain ordered list of suggestions.
+export function RecommendationList({ title, items }: { title?: string; items: string[] }) {
+  if (!items.length) return null;
+  return (
+    <div className="recommendation-list">
+      {title && <div className="recommendation-list-title">{title}</div>}
+      <ul className="recommendation-rows">
+        {items.map((text, i) => (
+          <li className="recommendation-row" key={i}>
+            <CheckCircle2 size={14} />
+            <span>{text}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
