@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
-import { Activity, CheckCircle2, ShieldCheck, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
+import { Activity, ArrowRight, CheckCircle2, ShieldCheck, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
 import "./styles.css";
 import "./themes.css";
 
@@ -283,6 +283,108 @@ export function ActionFeed({ items }: { items: FeedItem[] }) {
           <span className="feed-metric">{a.metric}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// --- Loupe AI helper panel ---------------------------------------------------
+// Compact, contextual "Ask Loupe" chat surface shared across Loupe Commerce,
+// Governance, and Triage so the AI helper reads as one product family instead
+// of each app building its own chat widget. This component is presentation
+// only: it renders whatever messages/state the calling app already has and
+// forwards question/ask callbacks -- it never fetches, never constructs the
+// grounding payload, and never decides what the answer says. Each app owns
+// its own request shape (review context, incident context, etc.) and simply
+// passes pre-formatted question/answer pairs in `messages`.
+export type HelperMessage = { id: string; question: string; answer: string | null };
+
+export function AskLoupePanel({
+  title = "Ask Loupe",
+  status,
+  messages,
+  question,
+  onQuestionChange,
+  onAsk,
+  asking,
+  disabled,
+  disabledMessage,
+  placeholder = "Ask Loupe a question…",
+  samplePrompts = [],
+}: {
+  title?: string;
+  status?: ReactNode;
+  messages: HelperMessage[];
+  question: string;
+  onQuestionChange: (value: string) => void;
+  onAsk: (q: string) => void;
+  asking: boolean;
+  disabled: boolean;
+  disabledMessage: string;
+  placeholder?: string;
+  samplePrompts?: string[];
+}) {
+  return (
+    <div className="chat-panel chat-panel-compact">
+      <div className="chat-panel-header">
+        <div className="chat-panel-title"><Sparkles size={15} />{title}</div>
+        {status && <div className="chat-panel-status muted small">{status}</div>}
+      </div>
+      <div className="chat-scroll chat-scroll-compact">
+        {disabled ? (
+          <div className="chat-empty">
+            <Sparkles size={18} />
+            <p>{disabledMessage}</p>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="chat-empty">
+            <Sparkles size={18} />
+            <p>Ask a question grounded in what's on this screen right now.</p>
+            {samplePrompts.length > 0 && (
+              <div className="chat-chip-row">
+                {samplePrompts.map((p) => (
+                  <button type="button" key={p} className="chat-chip" onClick={() => onAsk(p)}>{p}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          messages.map((m) => (
+            <div className="chat-message-group" key={m.id}>
+              <div className="chat-bubble chat-bubble-user"><span>{m.question}</span></div>
+              {m.answer === null ? (
+                <div className="chat-bubble chat-bubble-assistant"><Sparkles size={14} /><div className="chat-typing"><span /><span /><span /></div></div>
+              ) : (
+                <div className="chat-bubble chat-bubble-assistant"><Sparkles size={14} /><span>{m.answer}</span></div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+      <div className="chat-composer">
+        {!disabled && messages.length > 0 && samplePrompts.length > 0 && (
+          <div className="chat-chip-row chat-chip-row-compact">
+            {samplePrompts.map((p) => (
+              <button type="button" key={p} className="chat-chip" disabled={asking} onClick={() => onAsk(p)}>{p}</button>
+            ))}
+          </div>
+        )}
+        <form
+          className="chat-input-dock"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (question.trim()) onAsk(question);
+          }}
+        >
+          <input
+            value={question}
+            onChange={(e) => onQuestionChange(e.target.value)}
+            placeholder={placeholder}
+            aria-label={title}
+            disabled={disabled}
+          />
+          <button type="submit" className="chat-send" disabled={disabled || asking || !question.trim()} aria-label="Send question"><ArrowRight size={15} /></button>
+        </form>
+      </div>
     </div>
   );
 }

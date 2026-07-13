@@ -17,11 +17,41 @@ def test_governed_tables_come_from_persisted_catalog(monkeypatch):
         approved_source_tables=["order_items", "products"], version="v1",
     )
     monkeypatch.setattr(triage_warehouse, "read_catalog", lambda client: _Catalog([definition]))
-    assert triage_warehouse._governed_tables(object()) == ["order_items", "products"]
+    tables, metrics_by_table = triage_warehouse._governed_tables_and_metric_map(object())
+    assert tables == ["order_items", "products"]
+    assert metrics_by_table == {"order_items": ["revenue"], "products": ["revenue"]}
+
+
+def test_incidents_carry_governed_metric_names_from_their_table(monkeypatch):
+    definition = MetricDefinition(
+        name="revenue", owner="Analytics", description="Revenue", formula="SUM(sale_price)",
+        measurement_grain="order_item", freshness_expectation="daily", certification_status="pending_validation",
+        approved_source_tables=["order_items"], version="v1",
+    )
+    monkeypatch.setattr(triage_warehouse, "read_catalog", lambda client: _Catalog([definition]))
+    monkeypatch.setattr(
+        triage_warehouse,
+        "_active_incident_rows",
+        lambda client, config: [
+            {
+                "incident_id": "inc-1", "table_id": "order_items", "check_type": "freshness",
+                "severity": "high", "status": "open", "created_at": "2024-01-01T00:00:00Z",
+                "observed_value": None, "expected_value": None, "affected_metrics": [], "owner": None,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        triage_warehouse,
+        "derive_source_health",
+        lambda *args: SourceHealth(dataset="thelook_ecommerce", table_id="order_items", status="degraded"),
+    )
+    monkeypatch.setattr(triage_warehouse, "get_table_metadata", lambda *args: type("M", (), {"modified_at": None})())
+    result = triage_warehouse.build_warehouse_health(object(), type("C", (), {})())
+    assert result.incidents[0].governed_metric_names == ["revenue"]
 
 
 def test_warehouse_health_uses_persisted_incidents_and_real_source_health(monkeypatch):
-    monkeypatch.setattr(triage_warehouse, "_governed_tables", lambda client: ["order_items"])
+    monkeypatch.setattr(triage_warehouse, "_governed_tables_and_metric_map", lambda client: (["order_items"], {}))
     monkeypatch.setattr(triage_warehouse, "_active_incident_rows", lambda client, config: [])
     monkeypatch.setattr(
         triage_warehouse,

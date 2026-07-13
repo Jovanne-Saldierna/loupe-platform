@@ -3,7 +3,15 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_client
-from api.models import ErrorResponse, GovernanceCatalogResponse, GovernanceReviewRequest, GovernanceReviewResponse
+from api.models import (
+    ErrorResponse,
+    GovernanceCatalogResponse,
+    GovernanceHelperRequest,
+    GovernanceHelperResponse,
+    GovernanceReviewRequest,
+    GovernanceReviewResponse,
+)
+from api.services.governance_helper import answer_governance_question
 from api.services.governance_review import (
     CatalogUnavailableError,
     MetricNotFoundError,
@@ -36,3 +44,21 @@ def sql_review(payload: GovernanceReviewRequest, client=Depends(get_client)) -> 
         raise HTTPException(status_code=503, detail="The persisted metric catalog is temporarily unavailable.") from exc
     except Exception as exc:
         raise HTTPException(status_code=503, detail="The deterministic SQL review is temporarily unavailable.") from exc
+
+
+@router.post(
+    "/helper",
+    response_model=GovernanceHelperResponse,
+    responses={503: {"model": ErrorResponse}},
+)
+def helper(payload: GovernanceHelperRequest) -> GovernanceHelperResponse:
+    """Answer a question about an already-run SQL review, grounded only in
+    the review context the client sends (see api/services/governance_helper.py).
+    No BigQuery client dependency: this never re-queries the warehouse or
+    catalog, it only narrates the deterministic review result the caller
+    already has."""
+
+    try:
+        return GovernanceHelperResponse(answer=answer_governance_question(payload))
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Loupe could not produce a grounded answer right now.") from exc

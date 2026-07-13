@@ -28,11 +28,21 @@ class TriageUnavailableError(RuntimeError):
     pass
 
 
-def _governed_tables(client: Any) -> list[str]:
+def _governed_tables_and_metric_map(client: Any) -> tuple[list[str], dict[str, list[str]]]:
+    """Resolve the governed table set and, alongside it, a table_id ->
+    governed metric names map -- the reverse of Governance's
+    active_incident_ids (metric -> incidents via approved_source_tables).
+    Both are derived from the same persisted catalog read Triage already
+    depends on, so this adds no new data source and no new failure mode."""
     catalog = read_catalog(client)
     if catalog.catalog_unavailable:
         raise TriageUnavailableError("The persisted catalog is unavailable.")
-    return sorted({table for definition in catalog.definitions for table in definition.approved_source_tables})
+    tables = sorted({table for definition in catalog.definitions for table in definition.approved_source_tables})
+    metrics_by_table: dict[str, list[str]] = {}
+    for definition in catalog.definitions:
+        for table in definition.approved_source_tables:
+            metrics_by_table.setdefault(table, []).append(definition.name)
+    return tables, metrics_by_table
 
 
 def _active_incident_rows(client: Any, config: PlatformConfig) -> list[dict]:
@@ -51,7 +61,7 @@ def _active_incident_rows(client: Any, config: PlatformConfig) -> list[dict]:
 
 
 def build_warehouse_health(client: Any, config: PlatformConfig) -> TriageWarehouseResponse:
-    tables = _governed_tables(client)
+    tables, metrics_by_table = _governed_tables_and_metric_map(client)
     rows = _active_incident_rows(client, config)
     incidents_by_table: dict[str, list[dict]] = {table: [] for table in tables}
     for row in rows:
@@ -99,6 +109,7 @@ def build_warehouse_health(client: Any, config: PlatformConfig) -> TriageWarehou
             affected_metrics=list(row.get("affected_metrics") or []),
             owner=row.get("owner"),
             next_allowed_statuses=next_allowed_statuses(row["status"]),
+            governed_metric_names=sorted(metrics_by_table.get(row["table_id"], [])),
         )
         for row in rows
     ]

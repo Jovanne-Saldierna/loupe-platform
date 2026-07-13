@@ -439,6 +439,17 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 }
 .chat-send:disabled { opacity: .4; cursor: not-allowed; }
 
+/* Compact modifier for the shared AskLoupePanel (@loupe/ui) -- used when the
+   helper is embedded alongside review/incident content in Governance and
+   Triage rather than filling a dedicated Ask Loupe tab. Only sizing changes;
+   the visual language (bubbles, chips, composer) stays identical so the
+   helper still reads as the same Loupe AI product across all three apps. */
+.chat-panel-compact { max-width: none; border-radius: 18px; }
+.chat-panel-compact .chat-panel-header { padding: 14px 18px; }
+.chat-scroll-compact { min-height: 160px; max-height: 320px; padding: 16px 18px; gap: 16px; }
+.chat-panel-compact .chat-empty { padding: 18px 12px; }
+.chat-panel-compact .chat-composer { padding: 10px 18px 14px; }
+
 /* Ask Loupe insight-summary-card: reads as a continuation of the assistant
    turn above it (a soft left accent instead of a full boxed border on every
    side) rather than a separate report card pasted underneath the bubble. */

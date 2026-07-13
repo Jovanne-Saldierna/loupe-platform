@@ -1,22 +1,63 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, CircleDot, Gauge, RefreshCw, Siren, TableProperties } from "lucide-react";
-import { AppShell, Badge, FactPairGrid, MiniStatStrip, SectionCard, Stat, Unavailable } from "@loupe/ui";
+import { AppShell, AskLoupePanel, Badge, ChipList, FactPairGrid, MiniStatStrip, SectionCard, Stat, Unavailable } from "@loupe/ui";
+import type { HelperMessage } from "@loupe/ui";
 
 type TableHealth={table_id:string;status:"healthy"|"degraded"|"critical"|"unknown";freshness_minutes:number|null;active_incident_count:number};
-type Incident={incident_id:string;table_id:string;check_type:string;severity:string;status:string;created_at:string;observed_value:number|null;expected_value:number|null;affected_metrics:string[];owner:string|null;next_allowed_statuses:string[]};
+type Incident={incident_id:string;table_id:string;check_type:string;severity:string;status:string;created_at:string;observed_value:number|null;expected_value:number|null;affected_metrics:string[];owner:string|null;next_allowed_statuses:string[];governed_metric_names:string[]};
 type Warehouse={generated_at:string;dataset:string;monitored_tables:number;healthy_tables:number;degraded_tables:number;critical_tables:number;open_incidents:number;freshness_minutes:number|null;tables:TableHealth[];incidents:Incident[]};
 type TriageView = "warehouse" | "sourceHealth" | "incidentQueue";
+
+const HELPER_PROMPTS = [
+  "What happened here?",
+  "Is this a data issue or a real business issue?",
+  "What should I check next?",
+];
 
 export default function Page(){
   const api=process.env.NEXT_PUBLIC_API_BASE_URL??"http://localhost:8000";
   const [data,setData]=useState<Warehouse|null>(null);const [error,setError]=useState<string|null>(null);const [loading,setLoading]=useState(true);const [selected,setSelected]=useState<Incident|null>(null);const [notes,setNotes]=useState("");const [transitioning,setTransitioning]=useState(false);
   const [activeView,setActiveView]=useState<TriageView>("warehouse");
+  const [helperMessages,setHelperMessages]=useState<HelperMessage[]>([]); const [helperQuestion,setHelperQuestion]=useState(""); const [helperAsking,setHelperAsking]=useState(false);
+  const nextHelperId=useRef(0);
   const load=useCallback(()=>{setLoading(true);setError(null);fetch(`${api}/api/v1/triage/warehouse`).then(async r=>{if(!r.ok)throw new Error();return r.json()}).then((result:Warehouse)=>{setData(result);setSelected(current=>current?result.incidents.find(i=>i.incident_id===current.incident_id)??null:result.incidents[0]??null)}).catch(()=>setError("Persisted warehouse health could not be reached. No fictional incidents were substituted.")).finally(()=>setLoading(false));},[api]);
   useEffect(load,[load]);
+  // A new incident selection means prior helper answers no longer describe
+  // what's on screen -- clear the transcript rather than leaving a stale
+  // answer attached to a different incident's context.
+  useEffect(()=>{setHelperMessages([]);},[selected?.incident_id]);
   const healthyPct=data?.monitored_tables?Math.round(data.healthy_tables/data.monitored_tables*100):0;
   async function transition(target:string){if(!selected)return;if(target==="resolved"&&!notes.trim()){setError("Resolution notes are required before resolving an incident.");return}setTransitioning(true);setError(null);try{const response=await fetch(`${api}/api/v1/triage/incidents/${encodeURIComponent(selected.incident_id)}/transition`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({target_status:target,expected_current_status:selected.status,resolution_notes:target==="resolved"?notes:null})});if(!response.ok)throw new Error();setNotes("");await load()}catch{setError("The incident changed or the transition could not be committed. Refresh and retry.")}finally{setTransitioning(false)}}
+  // Grounded solely in the selected incident that's already on screen -- the
+  // same id/table/check/severity/status/observed/expected/affected metrics
+  // the timeline and fact grid above render, sent back verbatim so the
+  // helper cannot narrate a root cause or affected metric the deterministic
+  // incident record didn't already contain (see api/services/triage_helper.py).
+  async function askHelper(q:string){
+    if(!selected)return;
+    const id=String(nextHelperId.current++);
+    setHelperQuestion("");setHelperAsking(true);
+    setHelperMessages(prev=>[...prev,{id,question:q,answer:null}]);
+    try{
+      const activeIncidentCount=data?.tables.find(t=>t.table_id===selected.table_id)?.active_incident_count??null;
+      const response=await fetch(`${api}/api/v1/triage/helper`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+        question:q,incident_id:selected.incident_id,table_id:selected.table_id,check_type:selected.check_type,
+        severity:selected.severity,status:selected.status,created_at:selected.created_at,
+        observed_value:selected.observed_value,expected_value:selected.expected_value,
+        affected_metrics:selected.affected_metrics,governed_metric_names:selected.governed_metric_names,
+        active_incident_count:activeIncidentCount,owner:selected.owner,
+      })});
+      const body=await response.json();
+      const answer=response.ok?body.answer:body.detail??"Loupe could not produce a grounded answer right now.";
+      setHelperMessages(prev=>prev.map(m=>m.id===id?{...m,answer}:m));
+    }catch{
+      setHelperMessages(prev=>prev.map(m=>m.id===id?{...m,answer:"Loupe could not be reached."}:m));
+    }finally{
+      setHelperAsking(false);
+    }
+  }
   const nav = [
     {label:"Warehouse",icon:Gauge,active:activeView==="warehouse",onClick:()=>setActiveView("warehouse")},
     {label:"Source Health",icon:TableProperties,active:activeView==="sourceHealth",onClick:()=>setActiveView("sourceHealth")},
@@ -27,7 +68,22 @@ export default function Page(){
       <header className="hero-panel page-header"><div><div className="eyebrow">RELIABILITY LAYER</div><h1>Warehouse health</h1><div className="muted">Persisted incidents across governed data sources</div></div><div className="actions"><Badge>{data?`${data.monitored_tables} sources monitored`:"Live persistence"}</Badge><button className="button" onClick={load} disabled={loading}><RefreshCw size={15}/>{loading?"Refreshing…":"Refresh"}</button></div></header>
       {error&&<Unavailable message={error}/>} {loading&&!data?<div className="card skeleton" aria-label="Loading warehouse health"/>:data&&<>
         {activeView==="warehouse"&&<section><div className="section-title">Key metrics</div><div className="metric-grid"><Stat label="Healthy tables" value={String(data.healthy_tables)} change={`${healthyPct}%`}/><Stat label="Open incidents" value={String(data.open_incidents)} change={`${data.critical_tables} critical`}/><Stat label="Sources healthy" value={`${healthyPct}%`} change={`${data.monitored_tables} governed`}/><Stat label="Max freshness" value={formatFreshness(data.freshness_minutes)} change="metadata"/></div></section>}
-        {activeView==="sourceHealth"&&<section><div className="section-title">Operations</div><div className="triage-layout"><SectionCard icon={TableProperties} title="Governed source health" description="Current persisted incident state" action={<Badge>Live</Badge>}><div className="health-bars">{data.tables.map(table=><button key={table.table_id} className="health-row" onClick={()=>setSelected(data.incidents.find(i=>i.table_id===table.table_id)??null)}><span className="health-name-wrap"><span className="health-name">{table.table_id}</span><span className="health-count">{table.active_incident_count} active incident{table.active_incident_count===1?"":"s"}</span></span><span className="health-track"><span className={`health-fill health-${table.status}`} style={{width:table.status==="healthy"?"100%":table.status==="degraded"?"62%":table.status==="critical"?"35%":"18%"}}/></span><span className={`status-dot status-${table.status}`}>{table.status}</span></button>)}</div></SectionCard><SectionCard icon={Siren} title="Incident timeline" description={selected?`${selected.table_id} · ${selected.check_type}`:"No active incident selected"} action={selected&&<Badge tone="warning">{selected.severity}</Badge>}>{selected?<><div className="timeline"><TimelineStep icon={CircleDot} label="Detected" detail={new Date(selected.created_at).toLocaleString()}/><TimelineStep icon={CheckCircle2} label={selected.status} detail={selected.owner?`Owner: ${selected.owner}`:"Owner unassigned"}/>{selected.affected_metrics.length>0&&<TimelineStep icon={AlertTriangle} label="Affected metrics" detail={selected.affected_metrics.join(", ")}/>}</div><FactPairGrid items={observedExpectedFacts(selected)}/><div className="incident-actions">{selected.next_allowed_statuses.map(status=><button className="button" key={status} disabled={transitioning} onClick={()=>transition(status)}>{status.replaceAll("_"," ")}</button>)}</div>{selected.next_allowed_statuses.includes("resolved")&&<textarea className="notes" value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Required resolution notes" aria-label="Resolution notes"/>}</>:<div className="empty-review"><CheckCircle2 size={24}/><strong>No active incidents</strong><span className="muted small">Governed sources currently have no persisted active incidents.</span></div>}</SectionCard></div></section>}
+        {activeView==="sourceHealth"&&<section><div className="section-title">Operations</div><div className="triage-layout"><SectionCard icon={TableProperties} title="Governed source health" description="Current persisted incident state" action={<Badge>Live</Badge>}><div className="health-bars">{data.tables.map(table=><button key={table.table_id} className="health-row" onClick={()=>setSelected(data.incidents.find(i=>i.table_id===table.table_id)??null)}><span className="health-name-wrap"><span className="health-name">{table.table_id}</span><span className="health-count">{table.active_incident_count} active incident{table.active_incident_count===1?"":"s"}</span></span><span className="health-track"><span className={`health-fill health-${table.status}`} style={{width:table.status==="healthy"?"100%":table.status==="degraded"?"62%":table.status==="critical"?"35%":"18%"}}/></span><span className={`status-dot status-${table.status}`}>{table.status}</span></button>)}</div></SectionCard><SectionCard icon={Siren} title="Incident timeline" description={selected?`${selected.table_id} · ${selected.check_type}`:"No active incident selected"} action={selected&&<Badge tone="warning">{selected.severity}</Badge>}>{selected?<><div className="timeline"><TimelineStep icon={CircleDot} label="Detected" detail={new Date(selected.created_at).toLocaleString()}/><TimelineStep icon={CheckCircle2} label={selected.status} detail={selected.owner?`Owner: ${selected.owner}`:"Owner unassigned"}/>{selected.affected_metrics.length>0&&<TimelineStep icon={AlertTriangle} label="Affected metrics" detail={selected.affected_metrics.join(", ")}/>}</div><FactPairGrid items={observedExpectedFacts(selected)}/><ChipList title="Affected governed metrics" items={selected.governed_metric_names} tone="down" emptyLabel="No governed metrics linked."/><div className="incident-actions">{selected.next_allowed_statuses.map(status=><button className="button" key={status} disabled={transitioning} onClick={()=>transition(status)}>{status.replaceAll("_"," ")}</button>)}</div>{selected.next_allowed_statuses.includes("resolved")&&<textarea className="notes" value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Required resolution notes" aria-label="Resolution notes"/>}</>:<div className="empty-review"><CheckCircle2 size={24}/><strong>No active incidents</strong><span className="muted small">Governed sources currently have no persisted active incidents.</span></div>}</SectionCard></div>
+        <div className="section-title">Loupe AI helper</div>
+        <AskLoupePanel
+          title="Ask Loupe"
+          status={selected?`Grounded in incident ${selected.incident_id} · ${selected.severity}`:"Waiting on a selection"}
+          messages={helperMessages}
+          question={helperQuestion}
+          onQuestionChange={setHelperQuestion}
+          onAsk={askHelper}
+          asking={helperAsking}
+          disabled={!selected}
+          disabledMessage="Select an incident or source health row, then ask Loupe what changed."
+          placeholder="Ask about this incident's cause, affected metrics, or next steps…"
+          samplePrompts={HELPER_PROMPTS}
+        />
+      </section>}
         {activeView==="incidentQueue"&&<section><div className="section-title">Incident queue</div><SectionCard icon={AlertTriangle} title="Active incident queue" description="Prioritized by deterministic severity rules" action={<Badge tone={data.incidents.length?"warning":"accent"}>{data.incidents.length} active</Badge>}><MiniStatStrip items={severityStrip(data.incidents)}/>{data.incidents.length?<div className="table-wrap"><table className="data-table incident-table"><thead><tr><th>Severity</th><th>Incident</th><th>Affected metrics</th><th>Age</th><th>Status</th></tr></thead><tbody>{data.incidents.map(incident=><tr key={incident.incident_id} onClick={()=>setSelected(incident)} className={selected?.incident_id===incident.incident_id?"selected":""}><td><span className={`severity severity-${incident.severity}`}>{incident.severity}</span></td><td><strong>{incident.table_id}</strong><div className="muted small">{incident.check_type.replaceAll("_"," ")}</div></td><td>{incident.affected_metrics.join(", ")||"None mapped"}</td><td>{formatAge(incident.created_at)}</td><td>{incident.status}</td></tr>)}</tbody></table></div>:<div className="queue-empty"><CheckCircle2 size={18}/>No active incidents</div>}</SectionCard></section>}
       </>}
     </div>

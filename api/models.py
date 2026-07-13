@@ -185,6 +185,35 @@ class GovernanceReviewResponse(BaseModel):
     alignment: list[ContractAlignment]
 
 
+class GovernanceHelperRequest(BaseModel):
+    """Everything the Governance SQL Review screen already has on hand
+    after a review has run -- sent back to the helper endpoint verbatim so
+    the AI narration has no path to invent a score, finding, or incident
+    that the deterministic review didn't already produce. `question` is
+    the only free-text field; every other field mirrors
+    GovernanceReviewResponse (see api/services/governance_helper.py for
+    how this is flattened into a grounding summary)."""
+
+    question: str = Field(min_length=3, max_length=1_000)
+    metric: CatalogMetric
+    sql: str = Field(min_length=1, max_length=50_000)
+    review_score: int
+    summary: str
+    findings: list[ReviewFinding]
+    trust_score: int
+    trust_band: str
+    trust_factors: list[TrustFactor]
+    recommended_next_steps: list[str]
+    referenced_tables: list[str]
+    source_health: str
+    active_incident_ids: list[str]
+    override_reason: Optional[str] = None
+
+
+class GovernanceHelperResponse(BaseModel):
+    answer: str
+
+
 class TriageTableHealth(BaseModel):
     table_id: str
     status: Literal["healthy", "degraded", "critical", "unknown"]
@@ -204,6 +233,12 @@ class TriageIncident(BaseModel):
     affected_metrics: list[str]
     owner: Optional[str]
     next_allowed_statuses: list[str]
+    # Reverse of GovernanceReviewResponse.active_incident_ids: which governed
+    # catalog metrics (by name) declare this incident's table_id in their
+    # approved_source_tables. Derived conservatively from the same persisted
+    # metric catalog Governance already reads -- never fabricated. Empty when
+    # the catalog is unavailable or no governed metric references the table.
+    governed_metric_names: list[str]
 
 
 class TriageWarehouseResponse(BaseModel):
@@ -217,6 +252,34 @@ class TriageWarehouseResponse(BaseModel):
     freshness_minutes: Optional[float]
     tables: list[TriageTableHealth]
     incidents: list[TriageIncident]
+
+
+class TriageHelperRequest(BaseModel):
+    """Everything the Triage Source Health screen already has on hand for
+    the currently selected incident -- sent back to the helper endpoint
+    verbatim so the AI narration cannot invent a root cause, severity, or
+    affected-metric list beyond what the deterministic incident record
+    already contains. `question` is the only free-text field; every other
+    field mirrors TriageIncident plus the source table's
+    active_incident_count."""
+
+    question: str = Field(min_length=3, max_length=1_000)
+    incident_id: str
+    table_id: str
+    check_type: str
+    severity: str
+    status: str
+    created_at: str
+    observed_value: Optional[float] = None
+    expected_value: Optional[float] = None
+    affected_metrics: list[str] = Field(default_factory=list)
+    governed_metric_names: list[str] = Field(default_factory=list)
+    active_incident_count: Optional[int] = None
+    owner: Optional[str] = None
+
+
+class TriageHelperResponse(BaseModel):
+    answer: str
 
 
 class IncidentTransitionRequest(BaseModel):

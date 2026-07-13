@@ -6,7 +6,7 @@ from api.services import loupe_overview
 def test_build_loupe_overview_uses_live_results_without_mock_fallback(monkeypatch):
     calls = []
 
-    def fake_kpis(client, start, end):
+    def fake_kpis(client, start, end, categories, states):
         calls.append((start, end))
         if len(calls) == 1:
             return {"revenue": 1200, "margin": 480, "total_items": 120, "returned_items": 6, "return_rate_pct": 5}

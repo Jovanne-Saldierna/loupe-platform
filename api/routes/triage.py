@@ -3,7 +3,15 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_client
-from api.models import ErrorResponse, IncidentTransitionRequest, IncidentTransitionResponse, TriageWarehouseResponse
+from api.models import (
+    ErrorResponse,
+    IncidentTransitionRequest,
+    IncidentTransitionResponse,
+    TriageHelperRequest,
+    TriageHelperResponse,
+    TriageWarehouseResponse,
+)
+from api.services.triage_helper import answer_triage_question
 from api.services.triage_warehouse import build_warehouse_health, transition_incident
 from shared.config import load_platform_config
 
@@ -40,3 +48,21 @@ def transition(incident_id: str, payload: IncidentTransitionRequest, client=Depe
         # Stale state and persistence contention are intentionally generic at
         # the HTTP boundary; the client refreshes the authoritative row.
         raise HTTPException(status_code=409, detail="The incident changed or the transition could not be committed. Refresh and retry.") from exc
+
+
+@router.post(
+    "/helper",
+    response_model=TriageHelperResponse,
+    responses={503: {"model": ErrorResponse}},
+)
+def helper(payload: TriageHelperRequest) -> TriageHelperResponse:
+    """Answer a question about the currently selected incident, grounded
+    only in the incident context the client sends (see
+    api/services/triage_helper.py). No BigQuery client dependency: this
+    never re-queries the warehouse, it only narrates the deterministic
+    incident record the caller already has."""
+
+    try:
+        return TriageHelperResponse(answer=answer_triage_question(payload))
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Loupe could not produce a grounded answer right now.") from exc
