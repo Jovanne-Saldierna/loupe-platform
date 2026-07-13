@@ -193,16 +193,43 @@ Environment note: some backend tests exercise real BigQuery-backed code paths an
 - Executive communication: business-performance and governance surfaces written for a leader making a decision, not for an engineer reading logs.
 - Full-stack analytics platform delivery: three independent frontends, a shared component library, a typed API boundary, and a real deployment path from Cloud Run and Vercel.
 
-## Screenshots
 
-<!-- Screenshot: Loupe Commerce Dashboard -->
-<!-- Screenshot: Ask Loupe -->
-<!-- Screenshot: Governance SQL Review -->
-<!-- Screenshot: Governance Steward Summary -->
-<!-- Screenshot: Triage Incident Queue -->
-<!-- Screenshot: Triage Playbook + SQL Sandbox -->
-<!-- Screenshot: Triage Lineage -->
-<!-- Screenshot: Triage Audit Trail -->
+## Product screenshots
+
+### Loupe Commerce Intelligence
+![Loupe Commerce Dashboard](docs/assets/screenshots/loupe-dashboard.png)
+
+Live business performance dashboard showing revenue, margin, return risk, channel mix, and category/region signals from governed warehouse data.
+
+### Ask Loupe Executive Brief
+![Ask Loupe Executive Brief](docs/assets/screenshots/loupe-ask-brief.png)
+
+Ask Loupe converts a plain-English business question into an executive-ready brief with evidence, key distinctions, and recommended actions grounded in live BigQuery data.
+
+### Metric Governance SQL Review
+![Metric Governance SQL Review](docs/assets/screenshots/governance-sql-review.png)
+
+Metric Governance reviews submitted SQL against governed definitions, surfaces deterministic trust score contributors, and explains whether a metric is safe for reporting.
+
+### Governance Definition Diff
+![Governance Definition Diff](docs/assets/screenshots/governance-definition-diff.png)
+
+Definition Diff compares certified metric logic against submitted SQL to identify drift, source mismatches, and approval risk.
+
+### Data Quality Source Health
+![Data Quality Source Health](docs/assets/screenshots/triage-source-health-ask.png)
+
+Data Quality Triage distinguishes pipeline freshness issues from real business movement, then guides the data team toward the next operational checks.
+
+### Triage Playbook Brief
+![Triage Playbook Brief](docs/assets/screenshots/triage-playbook-brief.png)
+
+The Triage Playbook converts a data-quality incident into an AI-generated investigation brief, affected downstream assets, suggested SQL checks, and safe sandbox proof.
+
+### Triage Lineage
+![Triage Lineage](docs/assets/screenshots/triage-lineage.png)
+
+Triage maps source tables to governed metrics and downstream assets, showing which business reporting surfaces inherit risk from a data-quality incident.
 
 ## Further documentation
 
