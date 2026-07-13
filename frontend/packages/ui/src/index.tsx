@@ -630,8 +630,8 @@ export function ChangeRiskList({ items, emptyLabel }: { items: ChangeRiskCategor
           <div className="change-risk-detail muted small">{it.detail}</div>
           {(it.meaning || it.whyItMatters) && (
             <div className="change-risk-explain">
-              {it.meaning && <p className="muted small"><strong>What this means:</strong> {it.meaning}</p>}
-              {it.whyItMatters && <p className="muted small"><strong>Why it matters:</strong> {it.whyItMatters}</p>}
+              {it.meaning && <div className="explain-line"><span className="explain-line-label">What this means</span><span className="explain-line-text muted small">{it.meaning}</span></div>}
+              {it.whyItMatters && <div className="explain-line"><span className="explain-line-label">Why it matters</span><span className="explain-line-text muted small">{it.whyItMatters}</span></div>}
             </div>
           )}
         </div>
@@ -722,9 +722,9 @@ export function CompletenessChecklist({ items, score }: { items: CompletenessChe
               <span className="completeness-row-detail muted small">{it.detail}</span>
               {(it.meaning || it.whyItMatters || it.goodState) && (
                 <div className="completeness-row-explain">
-                  {it.meaning && <span className="muted small"><strong>Meaning:</strong> {it.meaning}</span>}
-                  {it.whyItMatters && <span className="muted small"><strong>Why it matters:</strong> {it.whyItMatters}</span>}
-                  {it.goodState && <span className="muted small"><strong>Good state:</strong> {it.goodState}</span>}
+                  {it.meaning && <div className="explain-line"><span className="explain-line-label">Meaning</span><span className="explain-line-text muted small">{it.meaning}</span></div>}
+                  {it.whyItMatters && <div className="explain-line"><span className="explain-line-label">Why it matters</span><span className="explain-line-text muted small">{it.whyItMatters}</span></div>}
+                  {it.goodState && <div className="explain-line"><span className="explain-line-label">Good state</span><span className="explain-line-text muted small">{it.goodState}</span></div>}
                 </div>
               )}
             </div>

@@ -1069,8 +1069,17 @@ select[multiple].select { min-height: 84px; padding: 6px; }
    visually secondary (muted, smaller, separated by a hairline) so it reads
    as supporting context under the deterministic detail line above it, never
    competing with it. */
-.change-risk-explain { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); display: flex; flex-direction: column; gap: 2px; }
-.change-risk-explain strong { color: var(--foreground); font-weight: 650; }
+.change-risk-explain { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); display: flex; flex-direction: column; gap: 5px; }
+
+/* --- Structured helper line (@loupe/ui) ------------------------------------
+   Shared "small uppercase muted label, then normal-weight muted text" row
+   used anywhere a card explains a fixed field (drift-category meaning, a
+   completeness check's rationale) in general terms. Replaces the earlier
+   pattern of an inline <strong>Label:</strong> prefix inside a paragraph --
+   that read as random emphasis; a real label column reads as structure. */
+.explain-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.explain-line-label { flex: 0 0 auto; min-width: 96px; font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; color: var(--muted-foreground); }
+.explain-line-text { flex: 1 1 200px; min-width: 0; line-height: 1.5; }
 
 /* --- RecommendationCards (@loupe/ui) -- governance recommendations -------
    Distinct from RecommendationList's plain checklist rows: each item here
@@ -1091,15 +1100,16 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 }
 .recommendation-card-action { font-size: 14.5px; font-weight: 650; }
 .recommendation-card-field { display: flex; flex-direction: column; gap: 1px; }
-.recommendation-card-field-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted-foreground); }
+.recommendation-card-field-label { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; color: var(--muted-foreground); }
 .recommendation-card-rationale { font-size: 13px; line-height: 1.5; color: var(--foreground); }
 /* Operational detail a data steward actually needs before acting: who owns
    it, what to do next, and -- when this recommendation is blocking -- what
    it blocks. Rendered as a small labeled key/value strip under the
-   rationale, not folded into the prose above. */
-.recommendation-card-meta { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; }
+   rationale, not folded into the prose above -- same small-uppercase-muted
+   label convention as .recommendation-card-field-label and .explain-line-label. */
+.recommendation-card-meta { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; }
 .recommendation-card-meta-row { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; }
-.recommendation-card-meta-label { flex: 0 0 auto; min-width: 110px; font-weight: 650; color: var(--muted-foreground); }
+.recommendation-card-meta-label { flex: 0 0 auto; min-width: 110px; font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; color: var(--muted-foreground); }
 .recommendation-card-meta-blocking { color: #c0362c; }
 .recommendation-card-meta-blocking .recommendation-card-meta-label { color: #c0362c; }
 .recommendation-card-info { border-left-color: var(--accent); }
@@ -1148,7 +1158,7 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 /* Breathing room before the Loupe AI Helper panel, scoped to Governance's
    own wrapper class so Loupe Commerce's and Triage's Ask Loupe placement is
    unaffected. */
-.ask-loupe-gap { margin-top: 28px; }
+.ask-loupe-gap { margin-top: 34px; }
 
 /* Metric Alignment's contract-comparison table: status rendered as a Badge
    (not plain text) and a slightly emphasized header row so the table reads
@@ -1157,6 +1167,14 @@ select[multiple].select { min-height: 84px; padding: 6px; }
    rules other apps rely on stay untouched. */
 .alignment-table-wrap .data-table th { background: var(--muted); font-weight: 650; }
 .alignment-table-wrap .data-table td { vertical-align: top; }
+
+/* Metric Alignment's card body -- callout, score row, table, footer note --
+   as one evenly-spaced vertical stack instead of relying on each child
+   component's own (smaller, inconsistent) top margin. Scoped to Governance's
+   own wrapper class. */
+.alignment-stack { display: flex; flex-direction: column; gap: 22px; }
+.alignment-stack .callout { margin-top: 0; }
+.alignment-stack .fact-pair-grid { margin-top: 0; }
 
 /* --- CompletenessChecklist (@loupe/ui) -- Steward Summary consistency checks
    A leading score readout (pass count + percentage) followed by one row per
@@ -1184,8 +1202,7 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 /* Optional meaning/why-it-matters/good-state lines -- kept short, one per
    line, secondary in weight/color to the pass-fail detail above them so the
    row stays scannable instead of turning into a paragraph. */
-.completeness-row-explain { display: flex; flex-direction: column; gap: 1px; margin-top: 3px; }
-.completeness-row-explain strong { color: var(--foreground); font-weight: 650; }
+.completeness-row-explain { display: flex; flex-direction: column; gap: 4px; margin-top: 5px; padding-top: 5px; border-top: 1px dashed var(--border); }
 .completeness-row-fail { border-left: 3px solid #c0362c; }
 .completeness-row-pass { border-left: 3px solid #1b7a43; }
 
@@ -1195,7 +1212,11 @@ select[multiple].select { min-height: 84px; padding: 6px; }
    collapsible detail so raw internal notes never dominate the card. */
 .grain-summary { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: var(--muted); }
 .grain-summary-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.grain-summary-label { flex: 0 0 auto; min-width: 92px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted-foreground); }
+/* Matches the small-uppercase-muted field-label convention used elsewhere
+   on this card (FactPairGrid's .fact-pair-label) so "Grain"/"Meaning"/"Why
+   it matters" read as the same kind of label, not a differently-weighted
+   one-off. */
+.grain-summary-label { flex: 0 0 auto; min-width: 92px; font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; color: var(--muted-foreground); }
 .grain-summary-value { font-size: 14px; font-weight: 650; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .grain-summary-text { font-size: 13px; line-height: 1.5; flex: 1 1 260px; min-width: 0; }
 .grain-summary-detail { margin-top: 4px; font-size: 12.5px; }

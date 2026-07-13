@@ -373,13 +373,15 @@ export default function Page(){
       </section>}
 
       {activeView==="metricAlignment"&&<section><div className="section-title">Definition evidence</div>{review?<SectionCard icon={GitCompare} title="Metric alignment" description="Definition evidence and query contract" action={<Badge tone={review.trust_band==="high_trust"?"accent":review.trust_band==="do_not_rely"?"warning":"neutral"}>{review.trust_band.replaceAll("_"," ")}</Badge>}>
-        <div className="callout callout-info callout-compact">
-          <div className="callout-title"><GitCompare size={14}/>What this table compares</div>
-          <p>Each row compares what the certified metric definition contracts for (Expected) against what the submitted SQL actually does (Observed). <strong>Aligned</strong> means the query matches the governed contract on that point; <strong>Review</strong> means it diverges and a reviewer should confirm the divergence is intentional before this metric is trusted for reporting.</p>
+        <div className="alignment-stack">
+          <div className="callout callout-info callout-compact">
+            <div className="callout-title"><GitCompare size={14}/>What this table compares</div>
+            <p>Each row compares what the certified metric definition contracts for (Expected) against what the submitted SQL actually does (Observed). Aligned means the query matches the governed contract on that point; Review means it diverges and a reviewer should confirm the divergence is intentional before this metric is trusted for reporting.</p>
+          </div>
+          <FactPairGrid items={[{label:"Review score",value:`${review.review_score}/100`},{label:"Trust score",value:`${review.trust_score}/100`,tone:review.trust_band==="do_not_rely"?"down":review.trust_band==="high_trust"?"up":undefined},{label:"Trust band",value:review.trust_band.replaceAll("_"," ")}]}/>
+          <div className="table-wrap alignment-table-wrap"><table className="data-table"><thead><tr><th>Contract</th><th>Expected</th><th>Observed</th><th>Status</th></tr></thead><tbody>{review.alignment.map(row=><tr key={row.contract}><td>{row.contract}</td><td>{row.expected}</td><td>{row.observed}</td><td><Badge tone={row.status==="Aligned"?"accent":"warning"}>{row.status}</Badge></td></tr>)}</tbody></table></div>
+          <p className="muted small">If a row shows Review, check Definition Diff for the underlying drift category, then Recommendations for what to do next.</p>
         </div>
-        <FactPairGrid items={[{label:"Review score",value:`${review.review_score}/100`},{label:"Trust score",value:`${review.trust_score}/100`,tone:review.trust_band==="do_not_rely"?"down":review.trust_band==="high_trust"?"up":undefined},{label:"Trust band",value:review.trust_band.replaceAll("_"," ")}]}/>
-        <div className="table-wrap alignment-table-wrap"><table className="data-table"><thead><tr><th>Contract</th><th>Expected</th><th>Observed</th><th>Status</th></tr></thead><tbody>{review.alignment.map(row=><tr key={row.contract}><td>{row.contract}</td><td>{row.expected}</td><td>{row.observed}</td><td><Badge tone={row.status==="Aligned"?"accent":"warning"}>{row.status}</Badge></td></tr>)}</tbody></table></div>
-        <p className="muted small">If a row shows Review, check Definition Diff for the underlying drift category, then Recommendations for what to do next.</p>
       </SectionCard>:<Card><div className="empty-review"><GitCompare size={24}/><strong>No alignment evidence yet</strong><span className="muted small">Run a review in SQL Review to see how the query maps to the governed definition contract.</span></div></Card>}</section>}
 
       {activeView==="definitionDiff"&&<section><div className="section-title">Definition change risk</div>
@@ -399,7 +401,7 @@ export default function Page(){
       {activeView==="impact"&&<section><div className="section-title">Downstream impact</div>
         {review?<SectionCard icon={GitBranch} title="What breaks if this metric is wrong" description={`${review.metric.name} · source tables → downstream assets`} action={<Badge tone={review.source_health==="healthy"?"accent":"warning"}>{review.source_health}</Badge>}>
           <p className="muted small">
-            This metric reads from the source tables below. Their current health is <strong>{review.source_health}</strong>
+            This metric reads from the source tables below. Their current health is {review.source_health}
             {review.active_incident_ids.length?` with ${review.active_incident_ids.length} active incident${review.active_incident_ids.length===1?"":"s"}`:" with no active incidents"}.
             {review.source_health==="healthy"&&!review.active_incident_ids.length?" If that changes, every downstream asset listed below inherits the risk.":" Every downstream asset listed below is exposed to that risk until it's resolved."}
           </p>
