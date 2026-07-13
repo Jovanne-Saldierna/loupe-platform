@@ -1,14 +1,56 @@
 # Loupe AI Analytics Platform
 
-An AI-assisted analytics operating layer that connects business performance, metric trust, and data reliability.
+AI analytics platform with three production-style apps across business performance, metric governance, and data reliability.
 
-Dashboards show what changed. Loupe AI Analytics Platform helps a data team decide whether the change is real, whether the metric behind it is trustworthy, what broke underneath it, and what to do next.
+**Live apps**
+- [Loupe Commerce Intelligence](https://loupe-web-eight.vercel.app)
+- [Metric Governance Copilot](https://governance-web-opal.vercel.app)
+- [Data Quality Incident Triage](https://triage-web-eight.vercel.app)
 
-## Origin: Streamlit Loupe OG
+## Platform overview
 
-Loupe began as a Streamlit AI commerce analytics agent focused on one workflow: helping users ask plain-English questions about e-commerce performance and receive grounded answers from BigQuery-backed data.
+| App | Purpose |
+|---|---|
+| Loupe Commerce Intelligence | Ask plain-English business questions grounded in live warehouse data. |
+| Metric Governance Copilot | Validate metric definitions, review SQL, and produce steward-ready summaries. |
+| Data Quality Incident Triage | Detect incidents, explain impact, generate triage playbooks, and support SQL debugging. |
 
-That original prototype proved the assistant pattern. The current Loupe AI Analytics Platform expands the idea into a broader operating layer for business performance, metric governance, and data quality triage.
+## Product screenshots
+
+### Loupe Commerce Intelligence
+![Loupe Commerce Dashboard](docs/assets/screenshots/loupe-dashboard.png)
+
+Live business performance dashboard showing revenue, margin, return risk, channel mix, and category/region signals from governed warehouse data.
+
+### Ask Loupe Executive Brief
+![Ask Loupe Executive Brief](docs/assets/screenshots/loupe-ask-brief.png)
+
+Ask Loupe converts a plain-English business question into an executive-ready brief with evidence, key distinctions, and recommended actions grounded in live BigQuery data.
+
+### Metric Governance SQL Review
+![Metric Governance SQL Review](docs/assets/screenshots/governance-sql-review.png)
+
+Metric Governance reviews submitted SQL against governed definitions, surfaces deterministic trust score contributors, and explains whether a metric is safe for reporting.
+
+### Governance Definition Diff
+![Governance Definition Diff](docs/assets/screenshots/governance-definition-diff.png)
+
+Definition Diff compares certified metric logic against submitted SQL to identify drift, source mismatches, and approval risk.
+
+### Data Quality Source Health
+![Data Quality Source Health](docs/assets/screenshots/triage-source-health-ask.png)
+
+Data Quality Triage distinguishes pipeline freshness issues from real business movement, then guides the data team toward the next operational checks.
+
+### Triage Playbook Brief
+![Triage Playbook Brief](docs/assets/screenshots/triage-playbook-brief.png)
+
+The Triage Playbook converts a data-quality incident into an AI-generated investigation brief, affected downstream assets, suggested SQL checks, and safe sandbox proof.
+
+### Triage Lineage
+![Triage Lineage](docs/assets/screenshots/triage-lineage.png)
+
+Triage maps source tables to governed metrics and downstream assets, showing which business reporting surfaces inherit risk from a data-quality incident.
 
 ## Why this exists
 
@@ -199,43 +241,11 @@ Environment note: some backend tests exercise real BigQuery-backed code paths an
 - Executive communication: business-performance and governance surfaces written for a leader making a decision, not for an engineer reading logs.
 - Full-stack analytics platform delivery: three independent frontends, a shared component library, a typed API boundary, and a real deployment path from Cloud Run and Vercel.
 
+## Origin: Streamlit Loupe OG
 
-## Product screenshots
+Loupe began as a Streamlit AI commerce analytics agent focused on one workflow: helping users ask plain-English questions about e-commerce performance and receive grounded answers from BigQuery-backed data.
 
-### Loupe Commerce Intelligence
-![Loupe Commerce Dashboard](docs/assets/screenshots/loupe-dashboard.png)
-
-Live business performance dashboard showing revenue, margin, return risk, channel mix, and category/region signals from governed warehouse data.
-
-### Ask Loupe Executive Brief
-![Ask Loupe Executive Brief](docs/assets/screenshots/loupe-ask-brief.png)
-
-Ask Loupe converts a plain-English business question into an executive-ready brief with evidence, key distinctions, and recommended actions grounded in live BigQuery data.
-
-### Metric Governance SQL Review
-![Metric Governance SQL Review](docs/assets/screenshots/governance-sql-review.png)
-
-Metric Governance reviews submitted SQL against governed definitions, surfaces deterministic trust score contributors, and explains whether a metric is safe for reporting.
-
-### Governance Definition Diff
-![Governance Definition Diff](docs/assets/screenshots/governance-definition-diff.png)
-
-Definition Diff compares certified metric logic against submitted SQL to identify drift, source mismatches, and approval risk.
-
-### Data Quality Source Health
-![Data Quality Source Health](docs/assets/screenshots/triage-source-health-ask.png)
-
-Data Quality Triage distinguishes pipeline freshness issues from real business movement, then guides the data team toward the next operational checks.
-
-### Triage Playbook Brief
-![Triage Playbook Brief](docs/assets/screenshots/triage-playbook-brief.png)
-
-The Triage Playbook converts a data-quality incident into an AI-generated investigation brief, affected downstream assets, suggested SQL checks, and safe sandbox proof.
-
-### Triage Lineage
-![Triage Lineage](docs/assets/screenshots/triage-lineage.png)
-
-Triage maps source tables to governed metrics and downstream assets, showing which business reporting surfaces inherit risk from a data-quality incident.
+That original prototype proved the assistant pattern. The current Loupe AI Analytics Platform expands the idea into a broader operating layer for business performance, metric governance, and data quality triage.
 
 ## Further documentation
 
