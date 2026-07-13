@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
@@ -1155,6 +1155,33 @@ export default function Page() {
   // stale brief open against the wrong answer.
   const [briefOpen, setBriefOpen] = useState<Record<string, boolean>>({});
 
+  // Resizable Ask Loupe response area -- purely a presentation/height
+  // affordance (same drag-handle pattern as Triage's AskLoupePanel
+  // `resizable` prop). Default is unset (compact, same as before); dragging
+  // the handle grows/shrinks .chat-scroll's height for the rest of the tab
+  // visit. Never touches messages, brief content, or the ask/answer flow.
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const [chatBodyHeight, setChatBodyHeight] = useState<number | null>(null);
+  const CHAT_MIN_BODY_HEIGHT = 220;
+  const CHAT_MAX_BODY_HEIGHT = 900;
+  function handleChatResizeStart(e: ReactPointerEvent<HTMLDivElement>) {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    const startY = e.clientY;
+    const startHeight = el.getBoundingClientRect().height;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    function onMove(ev: PointerEvent) {
+      const next = Math.min(CHAT_MAX_BODY_HEIGHT, Math.max(CHAT_MIN_BODY_HEIGHT, Math.round(startHeight + (ev.clientY - startY))));
+      setChatBodyHeight(next);
+    }
+    function onUp() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
   useEffect(() => {
     const q = new URLSearchParams({ start_date: startDate, end_date: endDate });
     selectedCategories.forEach((c) => q.append("categories", c));
@@ -1488,7 +1515,11 @@ export default function Page() {
               </div>
             </div>
 
-            <div className="chat-scroll">
+            <div
+              ref={chatScrollRef}
+              className="chat-scroll chat-scroll-resizable"
+              style={chatBodyHeight !== null ? { height: chatBodyHeight, maxHeight: chatBodyHeight } : undefined}
+            >
               {messages.length === 0 ? (
                 <div className="chat-empty">
                   <Sparkles size={22} />
@@ -1537,6 +1568,17 @@ export default function Page() {
                   </div>
                 );
               })}
+            </div>
+
+            <div
+              className="chat-resize-handle"
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Drag to resize response area"
+              title="Drag to resize response area"
+              onPointerDown={handleChatResizeStart}
+            >
+              <span className="chat-resize-grip" />
             </div>
 
             <div className="chat-composer">
