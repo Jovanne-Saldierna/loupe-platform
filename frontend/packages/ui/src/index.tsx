@@ -337,6 +337,58 @@ export function ActionFeed({ items }: { items: FeedItem[] }) {
 // passes pre-formatted question/answer pairs in `messages`.
 export type HelperMessage = { id: string; question: string; answer: string | null };
 
+// --- Restrained markdown rendering for Ask Loupe helper answers ------------
+// Presentation-only: turns the literal markdown syntax a helper answer's
+// text already contains (**bold**, `inline code`, #/##/### headings, "- "/
+// "* " bullets, "1. " numbered lists) into styled elements instead of
+// showing the raw symbols. Never touches, re-orders, or infers anything
+// about the answer text itself -- it only changes how the same string is
+// displayed. Shared by every AskLoupePanel caller (Governance, Triage), so
+// this fixes raw-markdown display everywhere the panel is used, not just
+// one app.
+function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter((t) => t.length > 0).map((token, i) => {
+    if (token.startsWith("**") && token.endsWith("**") && token.length > 4) {
+      return <strong key={`${keyPrefix}-b-${i}`}>{token.slice(2, -2)}</strong>;
+    }
+    if (token.startsWith("`") && token.endsWith("`") && token.length > 2) {
+      return <code className="chat-inline-code" key={`${keyPrefix}-c-${i}`}>{token.slice(1, -1)}</code>;
+    }
+    return <span key={`${keyPrefix}-t-${i}`}>{token}</span>;
+  });
+}
+
+function renderHelperAnswer(text: string): ReactNode {
+  const lines = text.split("\n");
+  const blocks: ReactNode[] = [];
+  let list: { ordered: boolean; items: string[] } | null = null;
+  const flushList = (key: string) => {
+    if (!list) return;
+    const items = list.items;
+    const ordered = list.ordered;
+    blocks.push(
+      ordered
+        ? <ol className="chat-md-list" key={key}>{items.map((it, i) => <li key={i}>{renderInlineMarkdown(it, `${key}-${i}`)}</li>)}</ol>
+        : <ul className="chat-md-list" key={key}>{items.map((it, i) => <li key={i}>{renderInlineMarkdown(it, `${key}-${i}`)}</li>)}</ul>
+    );
+    list = null;
+  };
+  lines.forEach((raw, idx) => {
+    const line = raw.trim();
+    if (!line) { flushList(`l-${idx}`); return; }
+    const heading = line.match(/^#{1,4}\s+(.*)$/);
+    if (heading) { flushList(`l-${idx}`); blocks.push(<div className="chat-md-heading" key={`h-${idx}`}>{renderInlineMarkdown(heading[1], `h-${idx}`)}</div>); return; }
+    const bullet = line.match(/^[-*]\s+(.*)$/);
+    if (bullet) { if (!list || list.ordered) flushList(`l-${idx}`); if (!list) list = { ordered: false, items: [] }; list.items.push(bullet[1]); return; }
+    const numbered = line.match(/^\d+[.)]\s+(.*)$/);
+    if (numbered) { if (!list || !list.ordered) flushList(`l-${idx}`); if (!list) list = { ordered: true, items: [] }; list.items.push(numbered[1]); return; }
+    flushList(`l-${idx}`);
+    blocks.push(<p className="chat-md-p" key={`p-${idx}`}>{renderInlineMarkdown(line, `p-${idx}`)}</p>);
+  });
+  flushList("l-end");
+  return <>{blocks}</>;
+}
+
 export function AskLoupePanel({
   title = "Ask Loupe",
   status,
@@ -400,7 +452,7 @@ export function AskLoupePanel({
               {m.answer === null ? (
                 <div className="chat-bubble chat-bubble-assistant"><Sparkles size={14} /><div className="chat-typing"><span /><span /><span /></div></div>
               ) : (
-                <div className="chat-bubble chat-bubble-assistant"><Sparkles size={14} /><span>{m.answer}</span></div>
+                <div className="chat-bubble chat-bubble-assistant"><Sparkles size={14} /><div className="chat-md">{renderHelperAnswer(m.answer)}</div></div>
               )}
             </div>
           ))
