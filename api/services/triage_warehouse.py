@@ -21,6 +21,7 @@ from apps.data_quality_triage.incident_lifecycle import (
     resolve_incident,
 )
 from apps.data_quality_triage.profiling import QUALIFIED_DATASET
+from apps.data_quality_triage.seed_incidents import seed_row_if_needed
 from apps.metric_governance.persistence import read_catalog
 from shared.config import PlatformConfig
 from shared.data_service import derive_source_health, get_table_metadata, run_query
@@ -98,6 +99,29 @@ def _incident_audit_trail(
 
     created_at = row["created_at"].isoformat() if hasattr(row["created_at"], "isoformat") else str(row["created_at"])
     table_id = row["table_id"]
+    seeded = bool(row.get("_seeded"))
+    # A seeded incident (see apps/data_quality_triage/seed_incidents.py) is
+    # labeled honestly here, not presented as a live detection -- it only
+    # ever appears when the persisted incidents table has zero active rows.
+    check_source = (
+        "apps.data_quality_triage.seed_incidents (seeded -- no live persisted incident on file)"
+        if seeded
+        else "apps.data_quality_triage.checks"
+    )
+    check_description = (
+        f"Seeded check '{row['check_type']}' on {table_id}, modeled on "
+        "apps.data_quality_triage.checks.check_stale_freshness -- no live "
+        "persisted incident currently exists for this table."
+        if seeded
+        else f"Deterministic check '{row['check_type']}' evaluated on {table_id}."
+    )
+    incident_source = "backend seed (no live persisted incident on file)" if seeded else "deterministic detection"
+    incident_description = (
+        f"Incident {row['incident_id']} seeded by the backend ({row['severity']} severity, {row['status']}) "
+        "to keep the triage product story demoable while no live incident is persisted."
+        if seeded
+        else f"Incident {row['incident_id']} generated ({row['severity']} severity, {row['status']})."
+    )
     return [
         AuditTrailEntry(
             step="metadata_loaded",
@@ -107,15 +131,15 @@ def _incident_audit_trail(
         ),
         AuditTrailEntry(
             step="check_evaluated",
-            description=f"Deterministic check '{row['check_type']}' evaluated on {table_id}.",
+            description=check_description,
             timestamp=created_at,
-            source="apps.data_quality_triage.checks",
+            source=check_source,
         ),
         AuditTrailEntry(
             step="incident_generated",
-            description=f"Incident {row['incident_id']} generated ({row['severity']} severity, {row['status']}).",
+            description=incident_description,
             timestamp=created_at,
-            source="deterministic detection",
+            source=incident_source,
         ),
     ]
 
@@ -138,6 +162,11 @@ def _active_incident_rows(client: Any, config: PlatformConfig) -> list[dict]:
 def build_warehouse_health(client: Any, config: PlatformConfig) -> TriageWarehouseResponse:
     tables, metrics_by_table, lineage_by_table = _governed_tables_and_metric_map(client)
     rows = _active_incident_rows(client, config)
+    # A real persisted incident always wins; the seed only ever fills in
+    # when the live query genuinely returned nothing (see
+    # apps/data_quality_triage/seed_incidents.py for why that currently
+    # happens and why this is not a silent failure fallback).
+    rows = seed_row_if_needed(rows)
     incidents_by_table: dict[str, list[dict]] = {table: [] for table in tables}
     for row in rows:
         incidents_by_table.setdefault(row["table_id"], []).append(row)
