@@ -200,6 +200,40 @@ export function FactPairGrid({ items }: { items: { label: string; value: string;
   );
 }
 
+// --- Measurement-grain summary ----------------------------------------------
+// Presentation-only: a metric's raw measurement_grain text is often a long,
+// internal-notes-style paragraph (source-table joins, edge cases, column-name
+// caveats). Showing that verbatim as the primary display buries the one fact
+// a business/BI reader actually needs -- what one row represents. This
+// component renders a short grain label plus plain-language meaning/why-it-
+// matters lines as the primary display, and demotes any longer technical
+// note to a collapsible <details> block. The calling app supplies all text;
+// this component invents nothing and performs no parsing itself.
+export function GrainSummary({ grain, meaning, whyItMatters, technicalDetail }: { grain: string; meaning: string; whyItMatters: string; technicalDetail?: string }) {
+  return (
+    <div className="grain-summary">
+      <div className="grain-summary-row">
+        <span className="grain-summary-label">Grain</span>
+        <span className="grain-summary-value">{grain}</span>
+      </div>
+      <div className="grain-summary-row">
+        <span className="grain-summary-label">Meaning</span>
+        <span className="grain-summary-text">{meaning}</span>
+      </div>
+      <div className="grain-summary-row">
+        <span className="grain-summary-label">Why it matters</span>
+        <span className="grain-summary-text">{whyItMatters}</span>
+      </div>
+      {technicalDetail && (
+        <details className="grain-summary-detail">
+          <summary>Technical notes</summary>
+          <p className="muted small">{technicalDetail}</p>
+        </details>
+      )}
+    </div>
+  );
+}
+
 // Generic "why this score" breakdown: a factor's name/label, its point
 // contribution, and a short reason -- for any calling app that computes a
 // score from named factors and wants to explain the math instead of just
@@ -212,8 +246,13 @@ export function ReasoningBreakdown({ items }: { items: { label: string; points: 
       {items.map((it) => (
         <div className="reasoning-row" key={it.label}>
           <div className="reasoning-row-head">
-            <span className="reasoning-label">{it.label}</span>
-            <span className="reasoning-points">{it.points > 0 ? `+${it.points}` : it.points}</span>
+            <span className="reasoning-label-group">
+              <span className="reasoning-label">{it.label}</span>
+              {/* Points pill sits directly against the label it belongs to,
+                  not floated to the far edge of the row, so the contribution
+                  reads as attached to what earned it. */}
+              <span className="reasoning-points">{it.points > 0 ? `+${it.points} pts` : `${it.points} pts`}</span>
+            </span>
           </div>
           <div className="reasoning-reason muted small">{it.reason}</div>
         </div>
@@ -401,9 +440,10 @@ export function AskLoupePanel({
 // has, with a copy-to-clipboard affordance and an optional short badge
 // (e.g. "Suggested -- not executed"). Never runs, validates, or interprets
 // the code itself -- it's a text block, not an editor or a query client.
-export function CodeBlock({ title, code, badge, actions }: { title?: string; code: string; badge?: string; actions?: ReactNode }) {
+export function CodeBlock({ title, code, badge, actions, className }: { title?: string; code: string; badge?: string; actions?: ReactNode; className?: string }) {
   return (
-    <div className="code-block">
+    <div className={`code-block${className ? ` ${className}` : ""}`}>
+
       <div className="code-block-head">
         <div className="code-block-head-text">
           {title && <span className="code-block-title">{title}</span>}
@@ -569,7 +609,13 @@ export function AssetImpactList({ title = "Impacted downstream assets", items, e
 // SQL review's own findings plus the governed metric's metadata). This
 // component never decides a category's status itself -- "aligned" /
 // "risk" / "unknown" and the detail text are rendered exactly as given.
-export type ChangeRiskCategory = { category: string; status: "aligned" | "risk" | "unknown"; detail: string };
+// `meaning`/`whyItMatters` are optional, calling-app-supplied plain-language
+// copy explaining a drift category in general (what this kind of mismatch
+// means and why it matters to business trust) -- distinct from `detail`,
+// which is this specific review's deterministic finding for that category.
+// Neither field is decided here; this component still only renders what
+// it's given.
+export type ChangeRiskCategory = { category: string; status: "aligned" | "risk" | "unknown"; detail: string; meaning?: string; whyItMatters?: string };
 
 export function ChangeRiskList({ items, emptyLabel }: { items: ChangeRiskCategory[]; emptyLabel?: string }) {
   if (!items.length) return emptyLabel ? <p className="muted small">{emptyLabel}</p> : null;
@@ -582,6 +628,12 @@ export function ChangeRiskList({ items, emptyLabel }: { items: ChangeRiskCategor
             <span className={`change-risk-pill change-risk-pill-${it.status}`}>{it.status}</span>
           </div>
           <div className="change-risk-detail muted small">{it.detail}</div>
+          {(it.meaning || it.whyItMatters) && (
+            <div className="change-risk-explain">
+              {it.meaning && <p className="muted small"><strong>What this means:</strong> {it.meaning}</p>}
+              {it.whyItMatters && <p className="muted small"><strong>Why it matters:</strong> {it.whyItMatters}</p>}
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -597,7 +649,12 @@ export function ChangeRiskList({ items, emptyLabel }: { items: ChangeRiskCategor
 // on screen). Ask Loupe may narrate *why* these matter, but this component
 // -- and the deterministic function behind it -- is what puts them on
 // screen; nothing here is only visible inside a chat transcript.
-export type GovernanceRecommendationItem = { action: string; rationale: string; priority: "info" | "required" | "blocking" };
+// `suggestedOwner`, `nextStep`, and `blocksApproval` are optional,
+// calling-app-supplied strings derived from data already on screen (e.g. the
+// metric's owner field, or the priority tier itself) -- not new facts the
+// deterministic recommendation didn't already imply. This component still
+// only renders what it's given; it decides nothing.
+export type GovernanceRecommendationItem = { action: string; rationale: string; priority: "info" | "required" | "blocking"; suggestedOwner?: string; nextStep?: string; blocksApproval?: string };
 
 export function RecommendationCards({ title, items, emptyLabel }: { title?: string; items: GovernanceRecommendationItem[]; emptyLabel?: string }) {
   if (!items.length) return emptyLabel ? <p className="muted small">{emptyLabel}</p> : null;
@@ -611,7 +668,17 @@ export function RecommendationCards({ title, items, emptyLabel }: { title?: stri
               <span className="recommendation-card-priority">{it.priority}</span>
               <span className="recommendation-card-action">{it.action}</span>
             </div>
-            <div className="recommendation-card-rationale">{it.rationale}</div>
+            <div className="recommendation-card-field">
+              <span className="recommendation-card-field-label">Why it matters</span>
+              <span className="recommendation-card-rationale">{it.rationale}</span>
+            </div>
+            {(it.suggestedOwner || it.nextStep || it.blocksApproval) && (
+              <div className="recommendation-card-meta">
+                {it.suggestedOwner && <div className="recommendation-card-meta-row"><span className="recommendation-card-meta-label">Suggested owner</span><span>{it.suggestedOwner}</span></div>}
+                {it.nextStep && <div className="recommendation-card-meta-row"><span className="recommendation-card-meta-label">Next step</span><span>{it.nextStep}</span></div>}
+                {it.blocksApproval && <div className="recommendation-card-meta-row recommendation-card-meta-blocking"><span className="recommendation-card-meta-label">Blocks approval</span><span>{it.blocksApproval}</span></div>}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -626,7 +693,13 @@ export function RecommendationCards({ title, items, emptyLabel }: { title?: stri
 // apps/metric_governance/remediation.py's derive_governance_completeness()).
 // This component never decides pass/fail itself -- it only renders the
 // boolean/detail pairs it's given, plus the already-computed score.
-export type CompletenessCheckItem = { label: string; passed: boolean; detail: string };
+// `meaning`/`whyItMatters`/`goodState` are optional, calling-app-supplied
+// plain-language copy explaining what a check requirement means in general
+// terms, why it matters operationally, and what a passing state looks like
+// -- distinct from `detail`, which stays this specific metric's deterministic
+// pass/fail evidence. Neither field is decided here; this component still
+// only renders what it's given.
+export type CompletenessCheckItem = { label: string; passed: boolean; detail: string; meaning?: string; whyItMatters?: string; goodState?: string };
 
 export function CompletenessChecklist({ items, score }: { items: CompletenessCheckItem[]; score?: number }) {
   if (!items.length) return null;
@@ -647,6 +720,13 @@ export function CompletenessChecklist({ items, score }: { items: CompletenessChe
             <div className="completeness-row-text">
               <span className="completeness-row-label">{it.label}</span>
               <span className="completeness-row-detail muted small">{it.detail}</span>
+              {(it.meaning || it.whyItMatters || it.goodState) && (
+                <div className="completeness-row-explain">
+                  {it.meaning && <span className="muted small"><strong>Meaning:</strong> {it.meaning}</span>}
+                  {it.whyItMatters && <span className="muted small"><strong>Why it matters:</strong> {it.whyItMatters}</span>}
+                  {it.goodState && <span className="muted small"><strong>Good state:</strong> {it.goodState}</span>}
+                </div>
+              )}
             </div>
           </div>
         ))}
