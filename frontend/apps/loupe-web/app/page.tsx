@@ -4,7 +4,7 @@ import type { ComponentType, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
-  ArrowRight, ChartNoAxesCombined, Database, DollarSign, Download, Eye, Home as HomeIcon, LayoutDashboard,
+  ArrowRight, ChartNoAxesCombined, Copy, Database, DollarSign, Download, Eye, Home as HomeIcon, LayoutDashboard,
   Lightbulb, ListChecks, MapPin, Megaphone, MessageSquareText, PackageSearch, Percent, RotateCcw, ScanSearch,
   ShieldCheck, ShoppingBag, SlidersHorizontal, Sparkles, Target, TriangleAlert, TrendingDown, TrendingUp, Trophy,
 } from "lucide-react";
@@ -681,6 +681,225 @@ function AskInsightBody({ response, insight }: { response: AskResponse; insight:
   );
 }
 
+// --- Ask Loupe "Brief view" -------------------------------------------------
+// A compact, screenshot-friendly summary of a single Ask Loupe response,
+// built entirely from data this file already computes for the full chat
+// answer above it: buildInsight()'s headline/buckets, leakageRows()/
+// reportingScopeFor() derived from response.raw_data, and the same
+// leakageActions()/byMarginDesc()/byVolumeDesc() the full leakage diagnostic
+// uses. No new backend call, no new AI narration, no invented numbers --
+// this only re-presents what the full answer already contains, more densely.
+type BriefEntry = { key: string; value: string };
+type BriefRow = { label: string; entries: BriefEntry[] };
+type BriefDistinction =
+  | { financial: { label: string; value: string; detail: string }; operational: { label: string; value: string; detail: string } }
+  | { text: string }
+  | null;
+type AskBrief = {
+  executive: string;
+  priorities: { label: string; value: string }[];
+  evidenceRows: BriefRow[];
+  distinction: BriefDistinction;
+  recommendations: string[];
+  grounding: string;
+};
+
+function formatGenericValue(key: string, value: number) {
+  const k = key.toLowerCase();
+  if (k.includes("pct") || k.includes("rate")) return `${value}%`;
+  if (k.includes("revenue") || k.includes("margin") || k.includes("lost")) return money(value);
+  return number(value);
+}
+// Same numeric-field convention AskEvidence already uses to tell metrics
+// apart from labels -- only numeric fields become entries, so a row's
+// label (category/state/month) is never duplicated as a "metric".
+function genericArrayRows(rows: Record<string, unknown>[]): BriefRow[] {
+  return rows.slice(0, 8).map((row) => {
+    const label = String(row.category ?? row.state ?? row.month ?? row.state_abbrev ?? "");
+    const entries = Object.entries(row)
+      .filter(([k, v]) => typeof v === "number" && k !== "state_abbrev")
+      .map(([k, v]) => ({ key: k.replaceAll("_", " "), value: formatGenericValue(k, v as number) }));
+    return { label, entries };
+  });
+}
+// Mirrors the shapes AskEvidence already knows how to render (array of
+// category/state rows, {months: [...]}, a single entity object, a generic
+// scalar object) -- returns rows for the brief's Evidence/Top-priorities
+// sections. Returns [] rather than guessing when the shape isn't recognized.
+function deriveEvidenceRows(raw: unknown): BriefRow[] {
+  if (raw == null || typeof raw !== "object") return [];
+  if (Array.isArray(raw)) {
+    const rows = raw as Record<string, unknown>[];
+    if (rows.length && "margin_lost_to_returns" in rows[0]) return []; // returns_leakage has its own branch below
+    return genericArrayRows(rows);
+  }
+  const obj = raw as Record<string, unknown>;
+  if (Array.isArray(obj.months)) return genericArrayRows((obj.months as Record<string, unknown>[]).slice(-6));
+  const numericEntries = Object.entries(obj).filter(([, v]) => typeof v === "number");
+  if (!numericEntries.length) return [];
+  const label = String(obj.category ?? obj.state ?? "Result");
+  return [{ label, entries: numericEntries.slice(0, 6).map(([k, v]) => ({ key: k.replaceAll("_", " "), value: formatGenericValue(k, v as number) })) }];
+}
+
+// Same two-sentence computation LeakageSummary renders below the full
+// answer, factored out so the brief's executive line matches it exactly
+// rather than re-deriving a second, possibly-different summary.
+function leakageSummaryText(rows: LeakageRow[]) {
+  const top3 = byMarginDesc(rows).slice(0, 3);
+  const top = top3[0];
+  const combined = top3.reduce((sum, r) => sum + r.margin_lost_to_returns, 0);
+  return `${top.category} is the top financial priority, losing ${money(top.margin_lost_to_returns)} in margin to returns at a ${top.return_rate_pct.toFixed(1)}% return rate. Together, ${top3.map((r) => r.category).join(", ")} account for ${money(combined)} in lost margin.`;
+}
+
+function buildAskBrief(response: AskResponse, insight: { headline: string; buckets: Record<string, string[]> }): AskBrief {
+  const rows = leakageRows(response.raw_data);
+  const scope = reportingScopeFor(response.category, response.raw_data);
+  const groundingParts = ["Grounded in live BigQuery data", response.category.replaceAll("_", " ")];
+  if (scope) groundingParts.push(scope);
+  if (response.source_health_status) groundingParts.push(`source: ${response.source_health_status}`);
+  const grounding = groundingParts.join(" · ");
+
+  if (response.category === "returns_leakage" && rows.length > 0) {
+    const topFinancial = byMarginDesc(rows)[0];
+    const topOperational = byVolumeDesc(rows)[0];
+    const priorityRows = byMarginDesc(rows).slice(0, 5);
+    return {
+      executive: leakageSummaryText(rows),
+      priorities: priorityRows.slice(0, 3).map((r) => ({ label: r.category, value: money(r.margin_lost_to_returns) })),
+      evidenceRows: priorityRows.map((r) => ({
+        label: r.category,
+        entries: [
+          { key: "margin lost", value: money(r.margin_lost_to_returns) },
+          { key: "return rate", value: `${r.return_rate_pct.toFixed(1)}%` },
+          { key: "returned items", value: number(r.returned_items) },
+        ],
+      })),
+      distinction: {
+        financial: { label: "Financial signal", value: topFinancial.category, detail: `${money(topFinancial.margin_lost_to_returns)} lost` },
+        operational: { label: "Operational signal", value: topOperational.category, detail: `${topOperational.return_rate_pct.toFixed(1)}% return rate · ${number(topOperational.returned_items)} returned items` },
+      },
+      recommendations: leakageActions(rows).map((a) => `${a.category} — ${a.step}`),
+      grounding,
+    };
+  }
+
+  const evidenceRows = deriveEvidenceRows(response.raw_data);
+  const distinctionText = insight.buckets.distinction?.length ? insight.buckets.distinction.join("\n\n") : null;
+  const recommendationLines = (insight.buckets.recommendations ?? []).flatMap((block) => {
+    const bullets = block.split("\n").map((l) => l.trim()).filter((l) => /^[-*]\s+/.test(l)).map((l) => l.replace(/^[-*]\s+/, ""));
+    return bullets.length ? bullets : [firstLine(block)].filter(Boolean);
+  });
+
+  return {
+    executive: insight.headline,
+    priorities: evidenceRows.slice(0, 3).map((r) => ({ label: r.label, value: r.entries[0]?.value ?? "—" })),
+    evidenceRows: evidenceRows.slice(0, 5),
+    distinction: distinctionText ? { text: distinctionText } : null,
+    recommendations: recommendationLines,
+    grounding,
+  };
+}
+
+// Plain-text rendering of an AskBrief for the "Copy brief" button -- the
+// same data the visual card shows, formatted for pasting into a portfolio
+// README, ticket, or Slack update.
+function briefToText(question: string, brief: AskBrief): string {
+  const lines: string[] = [`Ask Loupe brief — ${question}`, "", brief.executive, ""];
+  if (brief.priorities.length) {
+    lines.push("Top priorities:");
+    brief.priorities.forEach((p) => lines.push(`- ${p.label}: ${p.value}`));
+    lines.push("");
+  }
+  if (brief.evidenceRows.length) {
+    lines.push("Evidence:");
+    brief.evidenceRows.forEach((r) => lines.push(`- ${r.label}: ${r.entries.map((e) => `${e.key} ${e.value}`).join(", ")}`));
+    lines.push("");
+  }
+  if (brief.distinction) {
+    lines.push("Key distinction:");
+    if ("text" in brief.distinction) lines.push(brief.distinction.text);
+    else {
+      lines.push(`- Financial signal: ${brief.distinction.financial.value} (${brief.distinction.financial.detail})`);
+      lines.push(`- Operational signal: ${brief.distinction.operational.value} (${brief.distinction.operational.detail})`);
+    }
+    lines.push("");
+  }
+  if (brief.recommendations.length) {
+    lines.push("Recommended actions:");
+    brief.recommendations.forEach((r) => lines.push(`- ${r}`));
+    lines.push("");
+  }
+  lines.push(brief.grounding);
+  return lines.join("\n");
+}
+
+// Compact, screenshot-friendly presentation of an AskBrief -- rendered above
+// the full chat answer (AskInsightBody), never in place of it.
+function AskBriefCard({ question, response, insight, onCopyAnswer }: { question: string; response: AskResponse; insight: { headline: string; buckets: Record<string, string[]> }; onCopyAnswer: () => void }) {
+  const brief = buildAskBrief(response, insight);
+  return (
+    <div className="ask-brief">
+      <div className="ask-brief-head">
+        <div className="ask-brief-title"><Sparkles size={14} />Executive brief</div>
+        <div className="actions">
+          <button type="button" className="button ghost" onClick={() => navigator.clipboard.writeText(briefToText(question, brief))}><Copy size={13} />Copy brief</button>
+          <button type="button" className="button ghost" onClick={onCopyAnswer}><Copy size={13} />Copy answer</button>
+        </div>
+      </div>
+      <p className="ask-brief-executive">{brief.executive}</p>
+      {brief.priorities.length > 0 && (
+        <div className="ask-brief-section">
+          <div className="ask-brief-section-title">Top priorities</div>
+          <div className="ask-brief-priority-row">
+            {brief.priorities.map((p) => (
+              <div className="ask-brief-priority-chip" key={p.label}><span className="ask-brief-priority-label">{p.label}</span><span className="ask-brief-priority-value">{p.value}</span></div>
+            ))}
+          </div>
+        </div>
+      )}
+      {brief.evidenceRows.length > 0 && (
+        <div className="ask-brief-section">
+          <div className="ask-brief-section-title">Evidence</div>
+          <div className="ask-brief-evidence-table">
+            {brief.evidenceRows.map((r) => (
+              <div className="ask-brief-evidence-row" key={r.label}>
+                <span className="ask-brief-evidence-label">{r.label}</span>
+                <span className="ask-brief-evidence-metrics">{r.entries.map((e) => <span key={e.key}><b>{e.value}</b><i>{e.key}</i></span>)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {brief.distinction && (
+        <div className="ask-brief-section">
+          <div className="ask-brief-section-title"><Lightbulb size={13} />Key distinction</div>
+          {"text" in brief.distinction ? <div className="muted small">{renderMarkdown(brief.distinction.text)}</div> : (
+            <div className="distinction-columns ask-brief-distinction">
+              <div className="distinction-col distinction-col-financial">
+                <div className="distinction-col-title"><DollarSign size={12} />Financial signal</div>
+                <div className="distinction-col-value">{brief.distinction.financial.value}</div>
+                <div className="muted small">{brief.distinction.financial.detail}</div>
+              </div>
+              <div className="distinction-col distinction-col-operational">
+                <div className="distinction-col-title"><PackageSearch size={12} />Operational signal</div>
+                <div className="distinction-col-value">{brief.distinction.operational.value}</div>
+                <div className="muted small">{brief.distinction.operational.detail}</div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {brief.recommendations.length > 0 && (
+        <div className="ask-brief-section">
+          <div className="ask-brief-section-title"><Target size={13} />Recommended actions</div>
+          <ol className="ask-brief-actions">{brief.recommendations.map((r, i) => <li key={i}>{r}</li>)}</ol>
+        </div>
+      )}
+      <div className="ask-brief-grounding muted small">{brief.grounding}</div>
+    </div>
+  );
+}
+
 function median(nums: number[]) {
   if (!nums.length) return 0;
   const sorted = [...nums].sort((a, b) => a - b);
@@ -930,6 +1149,11 @@ export default function Page() {
   const [messages, setMessages] = useState<{ id: string; question: string; response: AskResponse | null }[]>([]);
   const [asking, setAsking] = useState(false);
   const nextMessageId = useRef(0);
+  // "Brief view" toggle state, keyed by message id -- scoped to the latest
+  // response only (see the "ask" view below), but keyed per-message rather
+  // than a single boolean so switching to a new question doesn't leave a
+  // stale brief open against the wrong answer.
+  const [briefOpen, setBriefOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const q = new URLSearchParams({ start_date: startDate, end_date: endDate });
@@ -1273,8 +1497,9 @@ export default function Page() {
                     {samplePrompts.map((p) => <button type="button" key={p} className="chat-chip" onClick={() => askQuestion(p)}>{p}</button>)}
                   </div>
                 </div>
-              ) : messages.map((m) => {
+              ) : messages.map((m, idx) => {
                 const resp = m.response;
+                const isLatest = idx === messages.length - 1;
                 return (
                   <div className="chat-message-group" key={m.id}>
                     <div className="chat-bubble chat-bubble-user"><span>{m.question}</span></div>
@@ -1284,9 +1509,27 @@ export default function Page() {
                       <div className="chat-bubble chat-bubble-assistant"><Sparkles size={15} /><span>{resp.answer}</span></div>
                     ) : (() => {
                       const insight = buildInsight(resp.answer);
+                      const briefVisible = isLatest && !!briefOpen[m.id];
                       return (
                         <>
                           <div className="chat-bubble chat-bubble-assistant"><Sparkles size={15} /><span>{insight.headline}</span></div>
+                          {/* Brief view is scoped to the latest response only -- a
+                              compact, screenshot-friendly summary of the answer
+                              directly above it, never a replacement for it. */}
+                          {isLatest && (
+                            <div className="ask-view-toggle">
+                              <button
+                                type="button"
+                                className={`button ghost ask-brief-toggle-btn${briefVisible ? " ask-brief-toggle-btn-active" : ""}`}
+                                onClick={() => setBriefOpen((prev) => ({ ...prev, [m.id]: !prev[m.id] }))}
+                              >
+                                <Sparkles size={13} />{briefVisible ? "Hide brief view" : "Brief view"}
+                              </button>
+                            </div>
+                          )}
+                          {briefVisible && (
+                            <AskBriefCard question={m.question} response={resp} insight={insight} onCopyAnswer={() => navigator.clipboard.writeText(resp.answer)} />
+                          )}
                           <AskInsightBody response={resp} insight={insight} />
                         </>
                       );

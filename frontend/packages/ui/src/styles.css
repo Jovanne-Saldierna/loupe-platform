@@ -653,6 +653,51 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .distinction-col-value { font-size: 14px; font-weight: 650; }
 @media (max-width: 560px) { .distinction-columns { grid-template-columns: 1fr; } }
 
+/* --- Ask Loupe "Brief view" -----------------------------------------------
+   A compact, screenshot-friendly summary of a single Ask Loupe response
+   (page.tsx's AskBriefCard/buildAskBrief), scoped to loupe-web only. Sits
+   above the full chat answer -- never replaces it -- and is built entirely
+   from data the full answer already computes (buildInsight()'s headline/
+   buckets, raw_data). Kept visually aligned with Loupe's blue assistant
+   accent (var(--accent)) rather than introducing a new color. */
+.ask-view-toggle { margin: 2px 0 2px; }
+.ask-brief-toggle-btn { display: inline-flex; align-items: center; gap: 6px; }
+.ask-brief-toggle-btn-active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-soft); }
+.ask-brief {
+  width: 100%; background: var(--card); border: 1px solid var(--accent-soft); border-left: 3px solid var(--accent);
+  border-radius: 14px; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 12px;
+}
+.ask-brief-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.ask-brief-title { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .03em; }
+.ask-brief-head .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ask-brief-executive { margin: 0; font-size: 14.5px; font-weight: 600; line-height: 1.5; }
+.ask-brief-section { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
+.ask-brief-section-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; color: var(--muted-foreground); }
+.ask-brief-priority-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.ask-brief-priority-chip {
+  display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 10px;
+  background: var(--muted); border: 1px solid var(--border); min-width: 96px;
+}
+.ask-brief-priority-label { font-size: 11px; color: var(--muted-foreground); }
+.ask-brief-priority-value { font-size: 14px; font-weight: 700; }
+.ask-brief-evidence-table { display: flex; flex-direction: column; gap: 4px; }
+.ask-brief-evidence-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12.5px; padding: 3px 0; }
+.ask-brief-evidence-label { font-weight: 650; flex: 0 0 auto; }
+.ask-brief-evidence-metrics { display: flex; gap: 12px; flex-wrap: wrap; margin-left: auto; text-align: right; }
+.ask-brief-evidence-metrics span { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
+.ask-brief-evidence-metrics b { font-size: 12.5px; font-weight: 700; }
+.ask-brief-evidence-metrics i { font-size: 10px; font-style: normal; color: var(--muted-foreground); }
+.ask-brief-distinction { margin-bottom: 0; }
+.ask-brief-actions { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; gap: 4px; }
+.ask-brief-grounding { padding-top: 8px; border-top: 1px dashed var(--border); }
+
+/* Print/export-friendly: strip surrounding chat chrome so the brief alone
+   is what ends up in a printed page or "Save as PDF" export. */
+@media print {
+  .sidebar, .chat-composer, .chat-panel-header, .ask-view-toggle, .model-narrative { display: none !important; }
+  .ask-brief { border: 1px solid #ccc; break-inside: avoid; }
+}
+
 /* --- Shell: real SaaS admin nav rail, not a floating card and not an
    overboxed frame -- scoped to .product-loupe only, so Governance/Triage
    keep their existing layout untouched. No outer box/shadow wraps the
