@@ -1,14 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, AlertTriangle, CheckCircle2, CircleDot, Gauge, RefreshCw, Siren, TableProperties } from "lucide-react";
-import { AppShell, AskLoupePanel, Badge, ChipList, FactPairGrid, MiniStatStrip, SectionCard, Stat, Unavailable } from "@loupe/ui";
-import type { HelperMessage } from "@loupe/ui";
+import { Activity, AlertTriangle, BookOpen, CheckCircle2, CircleDot, Gauge, GitBranch, ListChecks, RefreshCw, Siren, TableProperties } from "lucide-react";
+import { AppShell, AskLoupePanel, AuditTrailList, Badge, ChipList, CodeBlock, FactPairGrid, LineageChain, MiniStatStrip, RecommendationList, SectionCard, Stat, Unavailable } from "@loupe/ui";
+import type { AuditTrailItem, HelperMessage, LineageChainItem } from "@loupe/ui";
 
 type TableHealth={table_id:string;status:"healthy"|"degraded"|"critical"|"unknown";freshness_minutes:number|null;active_incident_count:number};
-type Incident={incident_id:string;table_id:string;check_type:string;severity:string;status:string;created_at:string;observed_value:number|null;expected_value:number|null;affected_metrics:string[];owner:string|null;next_allowed_statuses:string[];governed_metric_names:string[]};
-type Warehouse={generated_at:string;dataset:string;monitored_tables:number;healthy_tables:number;degraded_tables:number;critical_tables:number;open_incidents:number;freshness_minutes:number|null;tables:TableHealth[];incidents:Incident[]};
+type IncidentAuditEntry={step:string;description:string;timestamp:string|null;source:string|null};
+type Incident={incident_id:string;table_id:string;check_type:string;severity:string;status:string;created_at:string;observed_value:number|null;expected_value:number|null;affected_metrics:string[];owner:string|null;next_allowed_statuses:string[];governed_metric_names:string[];downstream_assets:string[];audit_trail:IncidentAuditEntry[]};
+type LineageMetric={name:string;downstream_dashboards:string[]};
+type TriageLineage={table_id:string;governed_metrics:LineageMetric[]};
+type Warehouse={generated_at:string;dataset:string;monitored_tables:number;healthy_tables:number;degraded_tables:number;critical_tables:number;open_incidents:number;freshness_minutes:number|null;tables:TableHealth[];incidents:Incident[];lineage:TriageLineage[]};
 type TriageView = "warehouse" | "sourceHealth" | "incidentQueue";
+type SqlCheck={title:string;sql:string};
+type Playbook={likely_root_cause:string;impact_summary:string;affected_downstream_assets:string[];affected_governed_metrics:string[];debugging_steps:string[];sql_checks:SqlCheck[];owner_recommendation:string;next_action:string;model:string|null};
 
 const HELPER_PROMPTS = [
   "What happened here?",
@@ -22,13 +27,27 @@ export default function Page(){
   const [activeView,setActiveView]=useState<TriageView>("warehouse");
   const [helperMessages,setHelperMessages]=useState<HelperMessage[]>([]); const [helperQuestion,setHelperQuestion]=useState(""); const [helperAsking,setHelperAsking]=useState(false);
   const nextHelperId=useRef(0);
+  const [playbook,setPlaybook]=useState<Playbook|null>(null); const [playbookLoading,setPlaybookLoading]=useState(false); const [playbookError,setPlaybookError]=useState<string|null>(null);
+  // Client-appended audit entries -- ONLY pushed after a real, successful
+  // response comes back (never speculatively). Keyed by incident so a stale
+  // entry never appears to describe a different incident's activity.
+  const [extraAudit,setExtraAudit]=useState<Record<string,AuditTrailItem[]>>({});
   const load=useCallback(()=>{setLoading(true);setError(null);fetch(`${api}/api/v1/triage/warehouse`).then(async r=>{if(!r.ok)throw new Error();return r.json()}).then((result:Warehouse)=>{setData(result);setSelected(current=>current?result.incidents.find(i=>i.incident_id===current.incident_id)??null:result.incidents[0]??null)}).catch(()=>setError("Persisted warehouse health could not be reached. No fictional incidents were substituted.")).finally(()=>setLoading(false));},[api]);
   useEffect(load,[load]);
   // A new incident selection means prior helper answers no longer describe
   // what's on screen -- clear the transcript rather than leaving a stale
   // answer attached to a different incident's context.
-  useEffect(()=>{setHelperMessages([]);},[selected?.incident_id]);
+  useEffect(()=>{setHelperMessages([]);setPlaybook(null);setPlaybookError(null);},[selected?.incident_id]);
   const healthyPct=data?.monitored_tables?Math.round(data.healthy_tables/data.monitored_tables*100):0;
+  const lineageItems:LineageChainItem[]=useMemo(()=>(data?.lineage??[]).map(entry=>({
+    table:entry.table_id,
+    metrics:entry.governed_metrics.map(m=>({name:m.name,downstream:m.downstream_dashboards})),
+  })),[data?.lineage]);
+  const combinedAudit:AuditTrailItem[]=useMemo(()=>{
+    if(!selected)return [];
+    const deterministic:AuditTrailItem[]=selected.audit_trail.map(entry=>({step:entry.step,description:entry.description,timestamp:entry.timestamp,source:entry.source}));
+    return [...deterministic,...(extraAudit[selected.incident_id]??[])];
+  },[selected,extraAudit]);
   async function transition(target:string){if(!selected)return;if(target==="resolved"&&!notes.trim()){setError("Resolution notes are required before resolving an incident.");return}setTransitioning(true);setError(null);try{const response=await fetch(`${api}/api/v1/triage/incidents/${encodeURIComponent(selected.incident_id)}/transition`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({target_status:target,expected_current_status:selected.status,resolution_notes:target==="resolved"?notes:null})});if(!response.ok)throw new Error();setNotes("");await load()}catch{setError("The incident changed or the transition could not be committed. Refresh and retry.")}finally{setTransitioning(false)}}
   // Grounded solely in the selected incident that's already on screen -- the
   // same id/table/check/severity/status/observed/expected/affected metrics
@@ -52,10 +71,60 @@ export default function Page(){
       const body=await response.json();
       const answer=response.ok?body.answer:body.detail??"Loupe could not produce a grounded answer right now.";
       setHelperMessages(prev=>prev.map(m=>m.id===id?{...m,answer}:m));
+      if(response.ok){
+        // Real, successful response only -- append using the actual model
+        // reported by the backend (null when Claude isn't configured) and
+        // the actual question asked, never a fabricated placeholder.
+        appendAudit(selected.incident_id,{
+          step:"helper_question_asked",
+          description:`Helper asked: "${q}"${body.model?"":" (no model configured -- fallback response)"}`,
+          timestamp:new Date().toISOString(),
+          source:body.model?`model: ${body.model}`:null,
+        });
+      }
     }catch{
       setHelperMessages(prev=>prev.map(m=>m.id===id?{...m,answer:"Loupe could not be reached."}:m));
     }finally{
       setHelperAsking(false);
+    }
+  }
+  function appendAudit(incidentId:string,entry:AuditTrailItem){
+    setExtraAudit(prev=>({...prev,[incidentId]:[...(prev[incidentId]??[]),entry]}));
+  }
+  // Grounded only in the selected incident + the lineage/downstream metadata
+  // already rendered on screen -- this never re-queries the warehouse and
+  // never lets the AI decide whether the incident is real (see
+  // api/services/triage_playbook.py). Deterministic fields (SQL checks,
+  // debugging steps, owner recommendation) are computed server-side without
+  // any model call; only likely_root_cause/impact_summary/next_action are
+  // AI-narrated, and only from the facts sent below.
+  async function generatePlaybook(){
+    if(!selected)return;
+    setPlaybookLoading(true);setPlaybookError(null);
+    try{
+      const activeIncidentCount=data?.tables.find(t=>t.table_id===selected.table_id)?.active_incident_count??null;
+      const sourceHealth=data?.tables.find(t=>t.table_id===selected.table_id)?.status??null;
+      const response=await fetch(`${api}/api/v1/triage/playbook`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+        incident_id:selected.incident_id,table_id:selected.table_id,check_type:selected.check_type,
+        severity:selected.severity,status:selected.status,created_at:selected.created_at,
+        observed_value:selected.observed_value,expected_value:selected.expected_value,
+        affected_metrics:selected.affected_metrics,governed_metric_names:selected.governed_metric_names,
+        downstream_assets:selected.downstream_assets,active_incident_count:activeIncidentCount,
+        source_health:sourceHealth,owner:selected.owner,
+      })});
+      const body=await response.json();
+      if(!response.ok)throw new Error(body.detail??"Loupe could not produce a grounded playbook right now.");
+      setPlaybook(body as Playbook);
+      appendAudit(selected.incident_id,{
+        step:"ai_playbook_generated",
+        description:body.model?"Triage playbook generated from the incident's deterministic context.":"Triage playbook generated (deterministic fields only -- Claude isn't configured, so root cause/impact/next action use honest fallback text).",
+        timestamp:new Date().toISOString(),
+        source:body.model?`model: ${body.model}`:null,
+      });
+    }catch(err){
+      setPlaybookError(err instanceof Error?err.message:"Loupe could not produce a grounded playbook right now.");
+    }finally{
+      setPlaybookLoading(false);
     }
   }
   const nav = [
@@ -83,6 +152,29 @@ export default function Page(){
           placeholder="Ask about this incident's cause, affected metrics, or next steps…"
           samplePrompts={HELPER_PROMPTS}
         />
+        <div className="section-title">AI-generated triage playbook</div>
+        <SectionCard icon={BookOpen} title="Triage playbook" description={selected?`Grounded in incident ${selected.incident_id} · ${selected.table_id}`:"Select an incident to generate a playbook"} action={selected&&<button className="button" onClick={generatePlaybook} disabled={playbookLoading}>{playbookLoading?"Generating…":playbook?"Regenerate":"Generate playbook"}</button>}>
+          {!selected?<div className="empty-review"><BookOpen size={24}/><strong>No incident selected</strong><span className="muted small">Select a source health row or incident to generate a grounded triage playbook.</span></div>
+          :playbookError?<Unavailable message={playbookError}/>
+          :!playbook?<div className="empty-review"><BookOpen size={24}/><strong>No playbook generated yet</strong><span className="muted small">Generate a playbook grounded only in this incident's persisted fields -- nothing is fabricated.</span></div>
+          :<div className="playbook-body">
+            <FactPairGrid items={[{label:"Likely root cause",value:playbook.likely_root_cause},{label:"Impact summary",value:playbook.impact_summary},{label:"Owner recommendation",value:playbook.owner_recommendation},{label:"Next action",value:playbook.next_action}]}/>
+            <ChipList title="Affected downstream assets" items={playbook.affected_downstream_assets} tone="down" emptyLabel="No downstream assets on file for this table."/>
+            <ChipList title="Affected governed metrics" items={playbook.affected_governed_metrics} tone="down" emptyLabel="No governed metrics linked."/>
+            <RecommendationList title="Debugging steps" items={playbook.debugging_steps}/>
+            <div className="section-subtitle">Example SQL checks <span className="muted small">(suggested — not executed automatically)</span></div>
+            {playbook.sql_checks.map(check=><CodeBlock key={check.title} title={check.title} code={check.sql} badge="Suggested — not executed"/>)}
+            {!playbook.model&&<p className="muted small">Claude isn&apos;t configured in this environment, so root cause / impact / next action above use an honest fallback rather than an AI narration.</p>}
+          </div>}
+        </SectionCard>
+        <div className="section-title">Lineage &amp; downstream impact</div>
+        <SectionCard icon={GitBranch} title="Source → governed metric → downstream asset" description="Persisted catalog lineage for governed sources">
+          <LineageChain items={lineageItems} emptyLabel="No governed lineage on file for the currently monitored sources."/>
+        </SectionCard>
+        <div className="section-title">Audit trail</div>
+        <SectionCard icon={ListChecks} title="Incident activity" description={selected?`${selected.incident_id} · deterministic + AI-triggered steps`:"Select an incident to see its audit trail"}>
+          {selected?<AuditTrailList items={combinedAudit} emptyLabel="No audit entries recorded for this incident yet."/>:<div className="empty-review"><ListChecks size={24}/><strong>No incident selected</strong><span className="muted small">Select an incident to see what metadata was loaded, which check ran, and when the incident was generated.</span></div>}
+        </SectionCard>
       </section>}
         {activeView==="incidentQueue"&&<section><div className="section-title">Incident queue</div><SectionCard icon={AlertTriangle} title="Active incident queue" description="Prioritized by deterministic severity rules" action={<Badge tone={data.incidents.length?"warning":"accent"}>{data.incidents.length} active</Badge>}><MiniStatStrip items={severityStrip(data.incidents)}/>{data.incidents.length?<div className="table-wrap"><table className="data-table incident-table"><thead><tr><th>Severity</th><th>Incident</th><th>Affected metrics</th><th>Age</th><th>Status</th></tr></thead><tbody>{data.incidents.map(incident=><tr key={incident.incident_id} onClick={()=>setSelected(incident)} className={selected?.incident_id===incident.incident_id?"selected":""}><td><span className={`severity severity-${incident.severity}`}>{incident.severity}</span></td><td><strong>{incident.table_id}</strong><div className="muted small">{incident.check_type.replaceAll("_"," ")}</div></td><td>{incident.affected_metrics.join(", ")||"None mapped"}</td><td>{formatAge(incident.created_at)}</td><td>{incident.status}</td></tr>)}</tbody></table></div>:<div className="queue-empty"><CheckCircle2 size={18}/>No active incidents</div>}</SectionCard></section>}
       </>}

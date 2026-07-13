@@ -86,3 +86,13 @@ def test_helper_reports_named_owner_when_present(monkeypatch):
     triage_helper.answer_triage_question(_payload(owner="data-eng"))
 
     assert "Owner: data-eng" in captured["state_summary"]
+
+
+def test_model_used_reports_none_without_api_key(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert triage_helper.model_used() is None
+
+
+def test_model_used_reports_model_name_with_api_key(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    assert triage_helper.model_used() == triage_helper.MODEL_NAME

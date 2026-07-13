@@ -4,8 +4,11 @@ from datetime import datetime, timezone
 from typing import Any
 
 from api.models import (
+    AuditTrailEntry,
     IncidentTransitionResponse,
+    LineageMetric,
     TriageIncident,
+    TriageLineage,
     TriageTableHealth,
     TriageWarehouseResponse,
 )
@@ -28,21 +31,93 @@ class TriageUnavailableError(RuntimeError):
     pass
 
 
-def _governed_tables_and_metric_map(client: Any) -> tuple[list[str], dict[str, list[str]]]:
+def _governed_tables_and_metric_map(
+    client: Any,
+) -> tuple[list[str], dict[str, list[str]], dict[str, list[LineageMetric]]]:
     """Resolve the governed table set and, alongside it, a table_id ->
     governed metric names map -- the reverse of Governance's
-    active_incident_ids (metric -> incidents via approved_source_tables).
-    Both are derived from the same persisted catalog read Triage already
-    depends on, so this adds no new data source and no new failure mode."""
+    active_incident_ids (metric -> incidents via approved_source_tables) --
+    plus a table_id -> lineage (metric name + that metric's own
+    downstream_dashboards) map for the lineage/downstream-impact view. All
+    three are derived from the same persisted catalog read Triage already
+    depends on, so this adds no new data source and no new failure mode.
+    downstream_dashboards comes straight from shared.models.MetricDefinition
+    (seeded conservatively in shared/metric_catalog.py, e.g. "loupe_agent
+    dashboard: KPI summary, revenue trend" for revenue) -- never invented
+    here; an empty list simply means the catalog has no downstream asset on
+    file yet for that metric."""
     catalog = read_catalog(client)
     if catalog.catalog_unavailable:
         raise TriageUnavailableError("The persisted catalog is unavailable.")
     tables = sorted({table for definition in catalog.definitions for table in definition.approved_source_tables})
     metrics_by_table: dict[str, list[str]] = {}
+    lineage_by_table: dict[str, list[LineageMetric]] = {}
     for definition in catalog.definitions:
         for table in definition.approved_source_tables:
             metrics_by_table.setdefault(table, []).append(definition.name)
-    return tables, metrics_by_table
+            lineage_by_table.setdefault(table, []).append(
+                LineageMetric(name=definition.name, downstream_dashboards=list(definition.downstream_dashboards))
+            )
+    return tables, metrics_by_table, lineage_by_table
+
+
+def _downstream_assets_for_table(table_id: str, lineage_by_table: dict[str, list[LineageMetric]]) -> list[str]:
+    """Deduplicated, order-stable union of every downstream dashboard/asset
+    name across all governed metrics on `table_id` -- a flattened
+    convenience view of the same lineage data TriageWarehouseResponse.lineage
+    carries in full, for grounding an incident's playbook/detail panel
+    without a second lookup."""
+    seen: dict[str, None] = {}
+    for metric in lineage_by_table.get(table_id, []):
+        for asset in metric.downstream_dashboards:
+            seen.setdefault(asset, None)
+    return list(seen.keys())
+
+
+def _incident_audit_trail(
+    row: dict,
+    *,
+    table_metadata_loaded_at: str | None,
+) -> list[AuditTrailEntry]:
+    """Deterministic, grounded audit-trail facts for one incident -- never
+    AI-narrated. Three steps, each tied to a real fact this function
+    already has on hand:
+      1. metadata_loaded  -- the table metadata read that fed source-health
+         and freshness derivation (see build_warehouse_health's own
+         get_table_metadata() call). Timestamp is the table's own
+         last-modified time when known, honestly None otherwise -- never
+         backfilled with "now" to look complete.
+      2. check_evaluated   -- the deterministic check (check_type) that
+         actually produced this incident.
+      3. incident_generated -- the incident record itself.
+    AI-narrated steps ("ai_playbook_generated", "helper_question_asked")
+    are NOT added here -- those only happen if/when a user actually
+    triggers them client-side, so they are appended by the frontend from
+    the real response it receives (see triage-web/app/page.tsx), never
+    fabricated ahead of time by the backend."""
+
+    created_at = row["created_at"].isoformat() if hasattr(row["created_at"], "isoformat") else str(row["created_at"])
+    table_id = row["table_id"]
+    return [
+        AuditTrailEntry(
+            step="metadata_loaded",
+            description=f"Table metadata loaded for {table_id}.",
+            timestamp=table_metadata_loaded_at,
+            source="shared.data_service.get_table_metadata",
+        ),
+        AuditTrailEntry(
+            step="check_evaluated",
+            description=f"Deterministic check '{row['check_type']}' evaluated on {table_id}.",
+            timestamp=created_at,
+            source="apps.data_quality_triage.checks",
+        ),
+        AuditTrailEntry(
+            step="incident_generated",
+            description=f"Incident {row['incident_id']} generated ({row['severity']} severity, {row['status']}).",
+            timestamp=created_at,
+            source="deterministic detection",
+        ),
+    ]
 
 
 def _active_incident_rows(client: Any, config: PlatformConfig) -> list[dict]:
@@ -61,7 +136,7 @@ def _active_incident_rows(client: Any, config: PlatformConfig) -> list[dict]:
 
 
 def build_warehouse_health(client: Any, config: PlatformConfig) -> TriageWarehouseResponse:
-    tables, metrics_by_table = _governed_tables_and_metric_map(client)
+    tables, metrics_by_table, lineage_by_table = _governed_tables_and_metric_map(client)
     rows = _active_incident_rows(client, config)
     incidents_by_table: dict[str, list[dict]] = {table: [] for table in tables}
     for row in rows:
@@ -69,6 +144,7 @@ def build_warehouse_health(client: Any, config: PlatformConfig) -> TriageWarehou
 
     table_health: list[TriageTableHealth] = []
     freshness_values: list[float] = []
+    metadata_loaded_at_by_table: dict[str, str | None] = {}
     for table in tables:
         try:
             health = derive_source_health(client, QUALIFIED_DATASET, table)
@@ -77,6 +153,7 @@ def build_warehouse_health(client: Any, config: PlatformConfig) -> TriageWarehou
             status = "unknown"
         try:
             metadata = get_table_metadata(client, QUALIFIED_DATASET, table)
+            metadata_loaded_at_by_table[table] = metadata.modified_at
             if metadata.modified_at:
                 modified = datetime.fromisoformat(metadata.modified_at)
                 if modified.tzinfo is None:
@@ -86,6 +163,7 @@ def build_warehouse_health(client: Any, config: PlatformConfig) -> TriageWarehou
             else:
                 freshness = None
         except Exception:
+            metadata_loaded_at_by_table[table] = None
             freshness = None
         table_health.append(
             TriageTableHealth(
@@ -110,10 +188,18 @@ def build_warehouse_health(client: Any, config: PlatformConfig) -> TriageWarehou
             owner=row.get("owner"),
             next_allowed_statuses=next_allowed_statuses(row["status"]),
             governed_metric_names=sorted(metrics_by_table.get(row["table_id"], [])),
+            downstream_assets=_downstream_assets_for_table(row["table_id"], lineage_by_table),
+            audit_trail=_incident_audit_trail(
+                row, table_metadata_loaded_at=metadata_loaded_at_by_table.get(row["table_id"])
+            ),
         )
         for row in rows
     ]
     counts = {status: sum(1 for item in table_health if item.status == status) for status in ("healthy", "degraded", "critical")}
+    lineage = [
+        TriageLineage(table_id=table, governed_metrics=lineage_by_table.get(table, []))
+        for table in tables
+    ]
     return TriageWarehouseResponse(
         generated_at=datetime.now(timezone.utc).isoformat(),
         dataset=QUALIFIED_DATASET,
@@ -125,6 +211,7 @@ def build_warehouse_health(client: Any, config: PlatformConfig) -> TriageWarehou
         freshness_minutes=max(freshness_values) if freshness_values else None,
         tables=table_health,
         incidents=incidents,
+        lineage=lineage,
     )
 
 

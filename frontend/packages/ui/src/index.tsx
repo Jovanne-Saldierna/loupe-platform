@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
-import { Activity, ArrowRight, CheckCircle2, ShieldCheck, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
+import { Activity, ArrowRight, CheckCircle2, Copy, ShieldCheck, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
 import "./styles.css";
 import "./themes.css";
 
@@ -385,6 +385,99 @@ export function AskLoupePanel({
           <button type="submit" className="chat-send" disabled={disabled || asking || !question.trim()} aria-label="Send question"><ArrowRight size={15} /></button>
         </form>
       </div>
+    </div>
+  );
+}
+
+// --- Read-only code/SQL snippet -----------------------------------------
+// Presentation-only: renders whatever code text the calling app already
+// has, with a copy-to-clipboard affordance and an optional short badge
+// (e.g. "Suggested -- not executed"). Never runs, validates, or interprets
+// the code itself -- it's a text block, not an editor or a query client.
+export function CodeBlock({ title, code, badge }: { title?: string; code: string; badge?: string }) {
+  return (
+    <div className="code-block">
+      <div className="code-block-head">
+        <div className="code-block-head-text">
+          {title && <span className="code-block-title">{title}</span>}
+          {badge && <span className="code-block-badge">{badge}</span>}
+        </div>
+        <button type="button" className="button ghost code-block-copy" onClick={() => navigator.clipboard.writeText(code)}>
+          <Copy size={13} />Copy
+        </button>
+      </div>
+      <pre className="code-block-pre"><code>{code}</code></pre>
+    </div>
+  );
+}
+
+// --- Lineage / downstream-impact chain -----------------------------------
+// Presentation-only rendering of a source-table -> governed-metric ->
+// downstream-asset chain. Every table/metric/asset name is supplied by the
+// calling app from data it already fetched (e.g. the persisted metric
+// catalog's downstream_dashboards); this component performs no lookups and
+// invents nothing -- an empty `downstream` list just renders no arrow/asset
+// for that metric, and an empty `metrics` list renders a quiet
+// "no governed metrics" note rather than a fabricated chain segment.
+export type LineageChainItem = { table: string; metrics: { name: string; downstream: string[] }[] };
+
+export function LineageChain({ items, emptyLabel }: { items: LineageChainItem[]; emptyLabel?: string }) {
+  if (!items.length) return emptyLabel ? <p className="muted small">{emptyLabel}</p> : null;
+  return (
+    <div className="lineage-chain">
+      {items.map((item) => (
+        <div className="lineage-row" key={item.table}>
+          <span className="lineage-node lineage-node-table">{item.table}</span>
+          {item.metrics.length === 0 ? (
+            <span className="lineage-node lineage-node-empty muted small">No governed metrics on file</span>
+          ) : (
+            <div className="lineage-metrics">
+              {item.metrics.map((m) => (
+                <div className="lineage-metric-group" key={m.name}>
+                  <ArrowRight size={13} className="lineage-arrow" />
+                  <span className="lineage-node lineage-node-metric">{m.name}</span>
+                  {m.downstream.length > 0 && (
+                    <>
+                      <ArrowRight size={13} className="lineage-arrow" />
+                      <span className="lineage-node lineage-node-asset">{m.downstream.join(", ")}</span>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// --- Audit trail ----------------------------------------------------------
+// Presentation-only vertical trail of named steps -- deterministic facts
+// (metadata loaded, check evaluated, incident generated) and, when the
+// calling app appends them from a real response it received, AI-activity
+// steps (playbook generated, helper question asked) with the model that
+// produced them. This component never decides what happened; it only
+// renders the ordered list of steps it's given.
+export type AuditTrailItem = { step: string; description: string; timestamp?: string | null; source?: string | null };
+
+export function AuditTrailList({ items, emptyLabel }: { items: AuditTrailItem[]; emptyLabel?: string }) {
+  if (!items.length) return emptyLabel ? <p className="muted small">{emptyLabel}</p> : null;
+  return (
+    <div className="audit-trail">
+      {items.map((item, i) => (
+        <div className="audit-trail-row" key={`${item.step}-${i}`}>
+          <span className="audit-trail-dot" />
+          <div className="audit-trail-body">
+            <div className="audit-trail-head">
+              <span className="audit-trail-step">{item.step.replaceAll("_", " ")}</span>
+              {item.timestamp && <span className="audit-trail-time muted small">{item.timestamp}</span>}
+            </div>
+            <div className="audit-trail-desc muted small">{item.description}</div>
+            {item.source && <div className="audit-trail-source muted small">Source: {item.source}</div>}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

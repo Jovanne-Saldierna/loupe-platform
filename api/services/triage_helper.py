@@ -1,7 +1,23 @@
 from __future__ import annotations
 
+import os
+
 from api.models import TriageHelperRequest
 from apps.data_quality_triage.chat import ask_dashboard
+
+# Mirrors apps.data_quality_triage.chat's own model name and
+# ANTHROPIC_API_KEY check (that module's _anthropic_api_key() is private
+# and Streamlit-secrets-aware, so this is a lightweight, env-only
+# duplicate of the same check -- not a second source of truth for
+# WHETHER a key is configured, just for reporting to the caller which
+# model, if any, actually produced the answer). Never invented: if no key
+# is configured, model_used() returns None and the route surfaces that
+# honestly rather than naming a model that didn't run.
+MODEL_NAME = "claude-sonnet-4-6"
+
+
+def model_used() -> str | None:
+    return MODEL_NAME if os.getenv("ANTHROPIC_API_KEY", "").strip() else None
 
 
 def _summarize_incident_for_helper(payload: TriageHelperRequest) -> str:

@@ -9,9 +9,12 @@ from api.models import (
     IncidentTransitionResponse,
     TriageHelperRequest,
     TriageHelperResponse,
+    TriagePlaybookRequest,
+    TriagePlaybookResponse,
     TriageWarehouseResponse,
 )
-from api.services.triage_helper import answer_triage_question
+from api.services.triage_helper import answer_triage_question, model_used as helper_model_used
+from api.services.triage_playbook import generate_triage_playbook
 from api.services.triage_warehouse import build_warehouse_health, transition_incident
 from shared.config import load_platform_config
 
@@ -63,6 +66,25 @@ def helper(payload: TriageHelperRequest) -> TriageHelperResponse:
     incident record the caller already has."""
 
     try:
-        return TriageHelperResponse(answer=answer_triage_question(payload))
+        return TriageHelperResponse(answer=answer_triage_question(payload), model=helper_model_used())
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Loupe could not produce a grounded answer right now.") from exc
+
+
+@router.post(
+    "/playbook",
+    response_model=TriagePlaybookResponse,
+    responses={503: {"model": ErrorResponse}},
+)
+def playbook(payload: TriagePlaybookRequest) -> TriagePlaybookResponse:
+    """Generate an AI-grounded triage playbook for the currently selected
+    incident (see api/services/triage_playbook.py). No BigQuery client
+    dependency: debugging steps and SQL checks are deterministic, and the
+    narrated fields are grounded only in the incident/lineage context the
+    client already has -- this never re-queries the warehouse or decides
+    whether the incident is real."""
+
+    try:
+        return generate_triage_playbook(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Loupe could not produce a grounded playbook right now.") from exc
