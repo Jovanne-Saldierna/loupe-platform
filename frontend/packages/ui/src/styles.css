@@ -883,6 +883,18 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .recommendation-row { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.45; }
 .recommendation-row svg { color: var(--accent); flex: 0 0 auto; margin-top: 2px; }
 
+/* --- Chip list ---------------------------------------------------------
+   Generic related-items chip row (e.g. referenced tables, linked incident
+   IDs, tags) with an optional title and an optional quiet empty-state
+   message. Not tied to any one app's domain. */
+.chip-list { margin-top: 12px; }
+.chip-list-title { font-size: 13px; font-weight: 650; margin-bottom: 8px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--muted); color: var(--foreground); white-space: nowrap; }
+.chip-up { color: #1b7a43; background: #e7f7ee; }
+.chip-down { color: #c0362c; background: #fdecec; }
+.chip-neutral { color: var(--muted-foreground); background: var(--muted); }
+
 /* --- Data confidence strip ------------------------------------------------
    Trust metadata demoted to a quiet, full-width footer instead of a card in
    the prime right column -- smaller type, no border/shadow beyond a single

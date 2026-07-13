@@ -242,6 +242,28 @@ export function RecommendationList({ title, items }: { title?: string; items: st
   );
 }
 
+// Generic related-items chip list -- a title, a row of compact pill chips,
+// and an optional quiet empty-state message when there's nothing to show.
+// Not tied to any one app's domain (referenced tables, linked incidents,
+// tags, etc. are all just string items to the component).
+export function ChipList({ title, items, tone, emptyLabel }: { title?: string; items: string[]; tone?: CardTone; emptyLabel?: string }) {
+  if (!items.length && !emptyLabel) return null;
+  return (
+    <div className="chip-list">
+      {title && <div className="chip-list-title">{title}</div>}
+      {items.length ? (
+        <div className="chip-row">
+          {items.map((it) => (
+            <span className={`chip${tone ? ` chip-${tone}` : ""}`} key={it}>{it}</span>
+          ))}
+        </div>
+      ) : (
+        <p className="muted small">{emptyLabel}</p>
+      )}
+    </div>
+  );
+}
+
 export type FeedPriority = "high" | "medium" | "info";
 export type FeedItem = { icon: ComponentType<{ size?: number }>; title: string; metric: string; priority: FeedPriority };
 
