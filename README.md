@@ -52,6 +52,9 @@ The Triage Playbook converts a data-quality incident into an AI-generated invest
 
 Triage maps source tables to governed metrics and downstream assets, showing which business reporting surfaces inherit risk from a data-quality incident.
 
+![Loupe AI Analytics Applications Platform](docs/assets/screenshots/loupe-platform-collage.jpeg)
+
+
 ## Why this exists
 
 Modern data teams do not fail because they lack charts. They fail at the handoffs between three questions leadership actually asks:
