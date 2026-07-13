@@ -220,6 +220,7 @@ export default function Page(){
           disabledMessage="Select an incident or source health row, then ask Loupe what changed."
           placeholder="Ask about this incident's cause, affected metrics, or next steps…"
           samplePrompts={HELPER_PROMPTS}
+          resizable
         />
         </section>}
 

@@ -1,4 +1,7 @@
-import type { ComponentType, ReactNode } from "react";
+"use client";
+
+import type { ComponentType, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import { useRef, useState } from "react";
 import { Activity, ArrowRight, CheckCircle2, Copy, ShieldCheck, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
 import "./styles.css";
 import "./themes.css";
@@ -401,6 +404,18 @@ export function AskLoupePanel({
   disabledMessage,
   placeholder = "Ask Loupe a question…",
   samplePrompts = [],
+  // Opt-in only -- when omitted/false, rendering and behavior are byte-for-
+  // byte identical to before (Governance's default is unaffected). When
+  // true, a drag handle appears between the response body and the prompt/
+  // input dock, letting the calling page's user grow the response area
+  // vertically (e.g. Triage's Source Health helper, where 2-4 paragraph
+  // answers didn't fit the compact default). Purely a presentation/height
+  // affordance -- never touches messages, markdown rendering, or the
+  // question/answer flow.
+  resizable = false,
+  initialBodyHeight,
+  minBodyHeight = 160,
+  maxBodyHeight = 640,
 }: {
   title?: string;
   status?: ReactNode;
@@ -413,14 +428,43 @@ export function AskLoupePanel({
   disabledMessage: string;
   placeholder?: string;
   samplePrompts?: string[];
+  resizable?: boolean;
+  initialBodyHeight?: number;
+  minBodyHeight?: number;
+  maxBodyHeight?: number;
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [bodyHeight, setBodyHeight] = useState<number | null>(resizable ? initialBodyHeight ?? null : null);
+
+  function handleResizeStart(e: ReactPointerEvent<HTMLDivElement>) {
+    const el = scrollRef.current;
+    if (!el) return;
+    const startY = e.clientY;
+    const startHeight = el.getBoundingClientRect().height;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    function onMove(ev: PointerEvent) {
+      const next = Math.min(maxBodyHeight, Math.max(minBodyHeight, Math.round(startHeight + (ev.clientY - startY))));
+      setBodyHeight(next);
+    }
+    function onUp() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
   return (
     <div className="chat-panel chat-panel-compact">
       <div className="chat-panel-header">
         <div className="chat-panel-title"><Sparkles size={15} />{title}</div>
         {status && <div className="chat-panel-status muted small">{status}</div>}
       </div>
-      <div className="chat-scroll chat-scroll-compact">
+      <div
+        ref={scrollRef}
+        className={`chat-scroll chat-scroll-compact${resizable ? " chat-scroll-resizable" : ""}`}
+        style={bodyHeight !== null ? { height: bodyHeight, maxHeight: bodyHeight } : undefined}
+      >
         {disabled ? (
           <div className="chat-empty">
             <Sparkles size={18} />
@@ -458,6 +502,18 @@ export function AskLoupePanel({
           ))
         )}
       </div>
+      {resizable && (
+        <div
+          className="chat-resize-handle"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Drag to resize response area"
+          title="Drag to resize response area"
+          onPointerDown={handleResizeStart}
+        >
+          <span className="chat-resize-grip" />
+        </div>
+      )}
       <div className="chat-composer">
         {!disabled && messages.length > 0 && samplePrompts.length > 0 && (
           <div className="chat-chip-row chat-chip-row-compact">

@@ -490,6 +490,21 @@ select[multiple].select { min-height: 84px; padding: 6px; }
 .chat-panel-compact .chat-empty { padding: 18px 12px; }
 .chat-panel-compact .chat-composer { padding: 10px 18px 14px; }
 
+/* Resizable AskLoupePanel body (opt-in via the `resizable` prop -- see
+   index.tsx). Only applied when that prop is set, so default AskLoupePanel
+   usage (Governance) is visually unchanged. The handle sits between the
+   response body and the composer, styled like a code-editor resize grip: a
+   subtle bar that highlights on hover/drag rather than a native browser
+   resize corner, so it stays discoverable without looking noisy. */
+.chat-scroll-resizable { overflow-y: auto; }
+.chat-resize-handle {
+  display: flex; align-items: center; justify-content: center; height: 14px;
+  cursor: ns-resize; touch-action: none; user-select: none; flex: 0 0 auto;
+  background: var(--card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
+.chat-resize-grip { width: 36px; height: 4px; border-radius: 999px; background: var(--border); transition: background .15s ease; }
+.chat-resize-handle:hover .chat-resize-grip, .chat-resize-handle:active .chat-resize-grip { background: var(--accent); }
+
 /* --- CodeBlock (@loupe/ui) -- read-only suggested-SQL / code snippet ----- */
 .code-block { border: 1px solid var(--border); border-radius: 14px; background: var(--muted); overflow: hidden; }
 .code-block + .code-block { margin-top: 12px; }
