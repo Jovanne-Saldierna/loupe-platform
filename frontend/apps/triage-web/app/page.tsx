@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, AlertTriangle, BookOpen, CheckCircle2, CircleDot, Gauge, GitBranch, ListChecks, RefreshCw, Siren, TableProperties } from "lucide-react";
+import { Activity, AlertTriangle, BookOpen, CheckCircle2, CircleDot, Copy, Gauge, GitBranch, ListChecks, RefreshCw, Siren, Sparkles, TableProperties } from "lucide-react";
 import { AppShell, AskLoupePanel, AssetImpactList, AuditTrailList, Badge, ChipList, FactPairGrid, LineageChain, MiniStatStrip, PlaybookWorkflow, RecommendationList, SectionCard, SqlSandbox, Stat, Unavailable } from "@loupe/ui";
 import type { AuditTrailItem, HelperMessage, LineageChainItem, PlaybookStepItem, SqlSandboxResult } from "@loupe/ui";
 
@@ -30,6 +30,10 @@ export default function Page(){
   const nextHelperId=useRef(0);
   const [playbook,setPlaybook]=useState<Playbook|null>(null); const [playbookLoading,setPlaybookLoading]=useState(false); const [playbookError,setPlaybookError]=useState<string|null>(null);
   const [sandboxSql,setSandboxSql]=useState(""); const [sandboxCheckTitle,setSandboxCheckTitle]=useState<string|null>(null); const [sandboxResult,setSandboxResult]=useState<SqlSandboxResult|null>(null); const [sandboxRunning,setSandboxRunning]=useState(false);
+  // Screenshot-friendly Playbook brief toggle -- additive presentation only,
+  // built entirely from state already fetched for the full Playbook/SQL
+  // Sandbox cards below it (see PlaybookBrief/buildPlaybookBriefText).
+  const [playbookBriefOpen,setPlaybookBriefOpen]=useState(false);
   // Client-appended audit entries -- ONLY pushed after a real, successful
   // response comes back (never speculatively). Keyed by incident so a stale
   // entry never appears to describe a different incident's activity.
@@ -39,7 +43,7 @@ export default function Page(){
   // A new incident selection means prior helper answers no longer describe
   // what's on screen -- clear the transcript rather than leaving a stale
   // answer attached to a different incident's context.
-  useEffect(()=>{setHelperMessages([]);setPlaybook(null);setPlaybookError(null);setSandboxSql("");setSandboxCheckTitle(null);setSandboxResult(null);},[selected?.incident_id]);
+  useEffect(()=>{setHelperMessages([]);setPlaybook(null);setPlaybookError(null);setSandboxSql("");setSandboxCheckTitle(null);setSandboxResult(null);setPlaybookBriefOpen(false);},[selected?.incident_id]);
   const healthyPct=data?.monitored_tables?Math.round(data.healthy_tables/data.monitored_tables*100):0;
   const lineageItems:LineageChainItem[]=useMemo(()=>(data?.lineage??[]).map(entry=>({
     table:entry.table_id,
@@ -231,6 +235,18 @@ export default function Page(){
         </section>}
 
         {activeView==="playbook"&&<section><div className="section-title">AI-generated triage playbook</div>
+        {selected&&playbook&&<div className="playbook-brief-toggle-row">
+          <button type="button" className={`button ghost playbook-brief-toggle${playbookBriefOpen?" playbook-brief-toggle-active":""}`} onClick={()=>setPlaybookBriefOpen(o=>!o)}>
+            <Sparkles size={13}/>{playbookBriefOpen?"Hide playbook brief":"Playbook brief"}
+          </button>
+        </div>}
+        {playbookBriefOpen&&selected&&playbook&&<PlaybookBrief
+          incident={selected}
+          playbook={playbook}
+          sandboxResult={sandboxResult}
+          sandboxCheckTitle={sandboxCheckTitle}
+          sourceHealth={data.tables.find(t=>t.table_id===selected.table_id)?.status??null}
+        />}
         <SectionCard icon={BookOpen} title="Triage playbook" description={selectedSubtitle} action={selected&&<button className="button" onClick={generatePlaybook} disabled={playbookLoading}>{playbookLoading?"Generating…":playbook?"Regenerate":"Generate playbook"}</button>}>
           {!selected?<div className="empty-review"><BookOpen size={24}/><strong>No incident selected</strong><span className="muted small">Select an incident in Source Health or Incident Queue to generate a grounded triage playbook.</span></div>
           :playbookError?<Unavailable message={playbookError}/>
@@ -295,6 +311,133 @@ function observedExpectedFacts(incident:Incident):{label:string;value:string}[]{
   }
   return facts;
 }
+// --- Playbook brief (screenshot-friendly, additive) -------------------------
+// Compact re-presentation of the same incident/playbook/sandbox state the
+// full Playbook + SQL Sandbox cards below it already render -- no new fetch,
+// no new fields, nothing fabricated. Only omits full SQL text (title +
+// purpose only, per spec) and caps the suggested-check list to 3 so the
+// whole thing fits in one normal landscape screenshot.
+function sandboxCellPreview(value:unknown):string{
+  if(value===null||value===undefined)return "—";
+  if(typeof value==="boolean")return value?"true":"false";
+  return String(value);
+}
+function formatBytes(bytes:number|null):string|null{
+  if(bytes===null)return null;
+  if(bytes<1024)return `${bytes} B`;
+  if(bytes<1024*1024)return `${(bytes/1024).toFixed(1)} KB`;
+  return `${(bytes/(1024*1024)).toFixed(1)} MB`;
+}
+function buildPlaybookBriefText(incident:Incident,playbook:Playbook,sandboxResult:SqlSandboxResult|null,sandboxCheckTitle:string|null,sourceHealth:string|null):string{
+  const lines:string[]=[`Playbook brief — ${incident.incident_id}`,""];
+  lines.push("Incident:");
+  lines.push(`- Table: ${incident.table_id}`);
+  lines.push(`- Check: ${incident.check_type.replaceAll("_"," ")}`);
+  lines.push(`- Severity: ${incident.severity}`);
+  observedExpectedFacts(incident).forEach(f=>lines.push(`- ${f.label}: ${f.value}`));
+  lines.push("");
+  lines.push("AI triage summary:");
+  lines.push(`- Likely root cause: ${playbook.likely_root_cause}`);
+  lines.push(`- Impact summary: ${playbook.impact_summary}`);
+  lines.push(`- Next action: ${playbook.next_action}`);
+  if(!playbook.model)lines.push("(Claude isn't configured in this environment -- these three lines use an honest fallback, not an AI narration.)");
+  lines.push("");
+  lines.push("Affected assets:");
+  lines.push(`- Governed metrics: ${playbook.affected_governed_metrics.join(", ")||"None linked."}`);
+  lines.push(`- Downstream assets: ${playbook.affected_downstream_assets.join(", ")||"None on file."}`);
+  lines.push("");
+  lines.push("Debugging workflow (suggested, not executed automatically):");
+  playbook.sql_checks.slice(0,3).forEach((c,i)=>lines.push(`${i+1}. ${c.title} — ${c.purpose}`));
+  lines.push("");
+  if(sandboxResult){
+    lines.push("Sandbox proof:");
+    lines.push(`- Check: ${sandboxCheckTitle??"Sandbox query"}`);
+    if(sandboxResult.status==="success")lines.push(`- Result: ${sandboxResult.row_count} row${sandboxResult.row_count===1?"":"s"} returned (capped at ${sandboxResult.row_limit})`);
+    else if(sandboxResult.status==="rejected")lines.push(`- Result: rejected — ${sandboxResult.error??"unsafe or invalid SQL"}`);
+    else lines.push(`- Result: error — ${sandboxResult.error??"unknown error"}`);
+    const bytes=formatBytes(sandboxResult.bytes_processed);
+    if(bytes)lines.push(`- Bytes scanned: ${bytes}`);
+    if(sandboxResult.status==="success"&&sandboxResult.rows.length){
+      lines.push(`- Columns: ${sandboxResult.columns.join(", ")}`);
+      lines.push(`- First row: ${sandboxResult.columns.map(c=>sandboxCellPreview(sandboxResult.rows[0][c])).join(", ")}`);
+    }
+    lines.push("");
+  }
+  lines.push(`Grounded in incident ${incident.incident_id}'s persisted fields${sourceHealth?` · source health: ${sourceHealth}`:""}. SQL is suggested only, never executed automatically. The debugging sandbox is read-only.`);
+  return lines.join("\n");
+}
+function PlaybookBrief({incident,playbook,sandboxResult,sandboxCheckTitle,sourceHealth}:{incident:Incident;playbook:Playbook;sandboxResult:SqlSandboxResult|null;sandboxCheckTitle:string|null;sourceHealth:string|null}){
+  return (
+    <div className="playbook-brief">
+      <div className="playbook-brief-head">
+        <div className="playbook-brief-title"><Sparkles size={14}/>Playbook brief</div>
+        <button type="button" className="button ghost" onClick={()=>navigator.clipboard.writeText(buildPlaybookBriefText(incident,playbook,sandboxResult,sandboxCheckTitle,sourceHealth))}>
+          <Copy size={13}/>Copy brief
+        </button>
+      </div>
+
+      <div className="playbook-brief-section">
+        <div className="playbook-brief-section-title"><CircleDot size={13}/>Incident</div>
+        <div className="playbook-brief-incident-line">
+          <span className="playbook-brief-kv"><b>{incident.table_id}</b><i>table</i></span>
+          <span className="playbook-brief-kv"><b>{incident.check_type.replaceAll("_"," ")}</b><i>check</i></span>
+          <span className={`severity severity-${incident.severity}`}>{incident.severity}</span>
+        </div>
+        <FactPairGrid items={observedExpectedFacts(incident)}/>
+      </div>
+
+      <div className="playbook-brief-section">
+        <div className="playbook-brief-section-title"><BookOpen size={13}/>AI triage summary</div>
+        <FactPairGrid items={[
+          {label:"Likely root cause",value:playbook.likely_root_cause},
+          {label:"Impact summary",value:playbook.impact_summary},
+          {label:"Next action",value:playbook.next_action},
+        ]}/>
+        {!playbook.model&&<p className="muted small">Claude isn&apos;t configured in this environment -- an honest fallback, not an AI narration.</p>}
+      </div>
+
+      <div className="playbook-brief-section">
+        <div className="playbook-brief-section-title"><ListChecks size={13}/>Affected assets</div>
+        <ChipList title="Governed metrics" items={playbook.affected_governed_metrics} tone="down" emptyLabel="No governed metrics linked."/>
+        <AssetImpactList items={playbook.affected_downstream_assets} emptyLabel="No downstream assets on file for this table."/>
+      </div>
+
+      <div className="playbook-brief-section">
+        <div className="playbook-brief-section-title"><GitBranch size={13}/>Debugging workflow</div>
+        <ol className="playbook-brief-checks">
+          {playbook.sql_checks.slice(0,3).map(c=>(
+            <li key={c.title}><span className="playbook-brief-check-title">{c.title}</span><span className="muted small">{c.purpose}</span></li>
+          ))}
+        </ol>
+      </div>
+
+      {sandboxResult&&<div className="playbook-brief-section">
+        <div className="playbook-brief-section-title"><TableProperties size={13}/>Sandbox proof</div>
+        <div className="playbook-brief-sandbox-status">
+          <span className="playbook-brief-kv"><b>{sandboxCheckTitle??"Sandbox query"}</b><i>check</i></span>
+          {sandboxResult.status==="success"?
+            <span className="playbook-brief-kv"><b>{sandboxResult.row_count} row{sandboxResult.row_count===1?"":"s"}</b><i>of {sandboxResult.row_limit} cap</i></span>
+            :<span className={`playbook-brief-kv playbook-brief-kv-${sandboxResult.status}`}><b>{sandboxResult.status}</b><i>{sandboxResult.error??"see full sandbox for detail"}</i></span>
+          }
+          {sandboxResult.bytes_processed!==null&&<span className="playbook-brief-kv"><b>{formatBytes(sandboxResult.bytes_processed)}</b><i>scanned</i></span>}
+        </div>
+        {sandboxResult.status==="success"&&sandboxResult.rows.length>0&&(
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead><tr>{sandboxResult.columns.map(c=><th key={c}>{c}</th>)}</tr></thead>
+              <tbody><tr>{sandboxResult.columns.map(c=><td key={c}>{sandboxCellPreview(sandboxResult.rows[0][c])}</td>)}</tr></tbody>
+            </table>
+          </div>
+        )}
+      </div>}
+
+      <div className="playbook-brief-grounding muted small">
+        Grounded in incident {incident.incident_id}&apos;s persisted fields{sourceHealth?` · source health: ${sourceHealth}`:""}. SQL is suggested only, never executed automatically. The debugging sandbox is read-only.
+      </div>
+    </div>
+  );
+}
+
 // Queue-level severity summary, bucketed from the persisted `severity`
 // values already on each incident (high/medium seen in practice; anything
 // else falls into "Other" rather than assuming a fixed vocabulary).

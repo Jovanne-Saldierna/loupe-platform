@@ -735,6 +735,41 @@ select[multiple].select { min-height: 84px; padding: 6px; }
   .ask-brief { border: 1px solid #ccc; break-inside: avoid; }
 }
 
+/* Playbook brief (Triage): compact, screenshot-friendly re-presentation of
+   the same incident/playbook/sandbox state the full Playbook + SQL Sandbox
+   cards already render below it. Same card/section pattern as .ask-brief*
+   above, driven entirely by CSS vars so it inherits whatever product theme
+   it's rendered inside (here, Triage's dark theme) without any
+   .product-triage-scoped overrides needed. */
+.playbook-brief-toggle-row { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.playbook-brief-toggle { display: inline-flex; align-items: center; gap: 6px; }
+.playbook-brief-toggle-active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-soft); }
+.playbook-brief {
+  display: flex; flex-direction: column; gap: 14px; border: 1px solid var(--accent-soft);
+  border-left: 3px solid var(--accent); border-radius: 14px; background: var(--card); padding: 16px 18px 18px;
+  margin-bottom: 16px;
+}
+.playbook-brief-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.playbook-brief-title { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .03em; }
+.playbook-brief-section { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
+.playbook-brief-section:first-of-type { padding-top: 0; border-top: 0; }
+.playbook-brief-section-title { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; color: var(--muted-foreground); }
+.playbook-brief-incident-line { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.playbook-brief-kv { display: flex; flex-direction: column; gap: 1px; }
+.playbook-brief-kv b { font-size: 13px; font-weight: 700; line-height: 1.25; }
+.playbook-brief-kv i { font-size: 10.5px; font-style: normal; color: var(--muted-foreground); }
+.playbook-brief-kv-rejected b, .playbook-brief-kv-error b { color: #ff9a9a; }
+.playbook-brief-sandbox-status { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.playbook-brief-checks { display: flex; flex-direction: column; gap: 6px; margin: 0; padding-left: 18px; }
+.playbook-brief-checks li { display: flex; flex-direction: column; gap: 1px; }
+.playbook-brief-check-title { font-size: 13px; font-weight: 650; }
+.playbook-brief-grounding { padding-top: 10px; border-top: 1px dashed var(--border); line-height: 1.5; }
+@media (min-width: 900px) {
+  .playbook-brief-checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 16px; padding-left: 0; list-style: none; }
+  .playbook-brief-checks li { padding-left: 16px; position: relative; }
+  .playbook-brief-checks li::before { content: "•"; position: absolute; left: 0; color: var(--accent); }
+}
+
 /* --- Shell: real SaaS admin nav rail, not a floating card and not an
    overboxed frame -- scoped to .product-loupe only, so Governance/Triage
    keep their existing layout untouched. No outer box/shadow wraps the
