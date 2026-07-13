@@ -83,6 +83,31 @@
 .timeline-step { display: grid; grid-template-columns: 20px 1fr; gap: 9px; }
 .timeline-step svg { color: var(--accent); margin-top: 2px; }
 .incident-actions { display: flex; gap: 7px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 13px; }
+/* Transition-action buttons ("acknowledged", etc.) read as loud primary
+   white buttons under the global .product-triage .button override above --
+   fine for real primary actions (Refresh, Run check, Generate playbook),
+   wrong here where they compete with the incident details and Ask Loupe for
+   attention. Scoped to .incident-actions only (same 0,2,0 specificity,
+   wins by source order) so every other Triage button is untouched: a
+   muted, theme-aware status/action chip -- pill radius, subtle border,
+   small type, capitalized label -- with a purple-accent hover/focus state
+   so it still reads as clickable without being visually dominant. */
+.incident-actions .button {
+  background: var(--muted);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.incident-actions .button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.incident-actions .button:disabled { opacity: .5; }
 .notes { width: 100%; min-height: 70px; resize: vertical; margin-top: 9px; border: 1px solid var(--border); border-radius: 9px; background: var(--muted); color: var(--foreground); padding: 9px; }
 .incident-table tbody tr { cursor: pointer; }
 .incident-table tbody tr:hover, .incident-table tbody tr.selected { background: var(--accent-soft); }

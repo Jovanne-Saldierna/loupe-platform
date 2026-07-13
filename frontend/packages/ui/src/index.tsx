@@ -509,6 +509,58 @@ export function LineageChain({ items, emptyLabel }: { items: LineageChainItem[];
   );
 }
 
+// --- Impacted downstream assets --------------------------------------------
+// Presentation-only: renders the same downstream-asset strings the calling
+// app already has (e.g. incident.downstream_assets / playbook's
+// affected_downstream_assets, sourced from the metric catalog's
+// downstream_dashboards) as scannable grouped rows instead of one long chip
+// row. This component performs no lookups and invents no assets -- it only
+// classifies each existing string's *display kind* (dashboard/view/report/
+// agent view) from keywords already present in the string, so the label text
+// itself is shown verbatim/unchanged.
+export type AssetImpactItem = { label: string; kind: "dashboard" | "view" | "report" | "agent-view" | "asset" };
+
+function classifyDownstreamAsset(raw: string): AssetImpactItem {
+  const lower = raw.toLowerCase();
+  const isAgent = lower.includes("agent");
+  const isDashboard = lower.includes("dashboard");
+  const isReport = lower.includes("report");
+  const isView = lower.includes("view");
+  let kind: AssetImpactItem["kind"] = "asset";
+  if (isDashboard) kind = "dashboard";
+  else if (isAgent && isView) kind = "agent-view";
+  else if (isReport) kind = "report";
+  else if (isView) kind = "view";
+  else if (isAgent) kind = "agent-view";
+  return { label: raw, kind };
+}
+
+const ASSET_KIND_LABEL: Record<AssetImpactItem["kind"], string> = {
+  dashboard: "Dashboard",
+  view: "View",
+  report: "Report",
+  "agent-view": "Agent view",
+  asset: "Asset",
+};
+
+export function AssetImpactList({ title = "Impacted downstream assets", items, emptyLabel }: { title?: string; items: string[]; emptyLabel?: string }) {
+  if (!items.length) return emptyLabel ? <p className="muted small">{emptyLabel}</p> : null;
+  const classified = items.map(classifyDownstreamAsset);
+  return (
+    <div className="asset-impact">
+      <div className="asset-impact-title">{title}</div>
+      <div className="asset-impact-list">
+        {classified.map((it, i) => (
+          <div className="asset-impact-row" key={`${it.label}-${i}`}>
+            <span className={`asset-impact-kind asset-impact-kind-${it.kind}`}>{ASSET_KIND_LABEL[it.kind]}</span>
+            <span className="asset-impact-label">{it.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // --- Audit trail ----------------------------------------------------------
 // Presentation-only vertical trail of named steps -- deterministic facts
 // (metadata loaded, check evaluated, incident generated) and, when the

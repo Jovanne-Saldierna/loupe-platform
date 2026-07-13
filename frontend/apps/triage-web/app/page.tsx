@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertTriangle, BookOpen, CheckCircle2, CircleDot, Gauge, GitBranch, ListChecks, RefreshCw, Siren, TableProperties } from "lucide-react";
-import { AppShell, AskLoupePanel, AuditTrailList, Badge, ChipList, FactPairGrid, LineageChain, MiniStatStrip, PlaybookWorkflow, RecommendationList, SectionCard, SqlSandbox, Stat, Unavailable } from "@loupe/ui";
+import { AppShell, AskLoupePanel, AssetImpactList, AuditTrailList, Badge, ChipList, FactPairGrid, LineageChain, MiniStatStrip, PlaybookWorkflow, RecommendationList, SectionCard, SqlSandbox, Stat, Unavailable } from "@loupe/ui";
 import type { AuditTrailItem, HelperMessage, LineageChainItem, PlaybookStepItem, SqlSandboxResult } from "@loupe/ui";
 
 type TableHealth={table_id:string;status:"healthy"|"degraded"|"critical"|"unknown";freshness_minutes:number|null;active_incident_count:number};
@@ -225,7 +225,7 @@ export default function Page(){
 
         {activeView==="incidentQueue"&&<section><div className="section-title">Incident queue</div><SectionCard icon={AlertTriangle} title="Active incident queue" description="Prioritized by deterministic severity rules" action={<Badge tone={data.incidents.length?"warning":"accent"}>{data.incidents.length} active</Badge>}><MiniStatStrip items={severityStrip(data.incidents)}/>{data.incidents.length?<div className="table-wrap"><table className="data-table incident-table"><thead><tr><th>Severity</th><th>Incident</th><th>Affected metrics</th><th>Age</th><th>Status</th></tr></thead><tbody>{data.incidents.map(incident=><tr key={incident.incident_id} onClick={()=>setSelected(incident)} className={selected?.incident_id===incident.incident_id?"selected":""}><td><span className={`severity severity-${incident.severity}`}>{incident.severity}</span></td><td><strong>{incident.table_id}</strong><div className="muted small">{incident.check_type.replaceAll("_"," ")}</div></td><td>{incident.affected_metrics.join(", ")||"None mapped"}</td><td>{formatAge(incident.created_at)}</td><td>{incident.status}</td></tr>)}</tbody></table></div>:<div className="queue-empty"><CheckCircle2 size={18}/>No active incidents</div>}</SectionCard>
         <SectionCard icon={CircleDot} title="Selected incident facts" description={selectedSubtitle}>
-          {selected?<><FactPairGrid items={observedExpectedFacts(selected)}/><ChipList title="Affected governed metrics" items={selected.governed_metric_names} tone="down" emptyLabel="No governed metrics linked."/><ChipList title="Downstream assets" items={selected.downstream_assets} tone="down" emptyLabel="No downstream assets on file."/></>:<div className="empty-review"><CircleDot size={22}/><strong>No incident selected</strong><span className="muted small">Select a row above to see its facts, or open Source Health.</span></div>}
+          {selected?<><FactPairGrid items={observedExpectedFacts(selected)}/><ChipList title="Affected governed metrics" items={selected.governed_metric_names} tone="down" emptyLabel="No governed metrics linked."/><AssetImpactList items={selected.downstream_assets} emptyLabel="No downstream assets on file."/></>:<div className="empty-review"><CircleDot size={22}/><strong>No incident selected</strong><span className="muted small">Select a row above to see its facts, or open Source Health.</span></div>}
         </SectionCard>
         </section>}
 
@@ -236,7 +236,7 @@ export default function Page(){
           :!playbook?<div className="empty-review"><BookOpen size={24}/><strong>No playbook generated yet</strong><span className="muted small">Generate a playbook grounded only in this incident's persisted fields -- nothing is fabricated.</span></div>
           :<div className="playbook-body">
             <FactPairGrid items={[{label:"Likely root cause",value:playbook.likely_root_cause},{label:"Impact summary",value:playbook.impact_summary},{label:"Owner recommendation",value:playbook.owner_recommendation},{label:"Next action",value:playbook.next_action}]}/>
-            <ChipList title="Affected downstream assets" items={playbook.affected_downstream_assets} tone="down" emptyLabel="No downstream assets on file for this table."/>
+            <AssetImpactList items={playbook.affected_downstream_assets} emptyLabel="No downstream assets on file for this table."/>
             <ChipList title="Affected governed metrics" items={playbook.affected_governed_metrics} tone="down" emptyLabel="No governed metrics linked."/>
             <RecommendationList title="Investigation checklist" items={playbook.debugging_steps}/>
             <div className="section-subtitle">Debugging workflow <span className="muted small">-- run these SQL checks in order (suggested — not executed automatically)</span></div>
